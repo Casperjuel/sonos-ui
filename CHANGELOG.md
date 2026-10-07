@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/Casperjuel/sponos/compare/v0.5.0...v0.6.0) (2026-10-07)
+
+
+### Features
+
+* set up your own Spotify app from Settings to log in without the 5-user limit ([5a034d4](https://github.com/Casperjuel/sponos/commit/5a034d4912affa3a0c021608f2c99d065abd8a24))
+
+
+### Bug Fixes
+
+* explain when a Spotify account isn't registered for the app, and log it out ([5a034d4](https://github.com/Casperjuel/sponos/commit/5a034d4912affa3a0c021608f2c99d065abd8a24))
+
 ## [0.5.0](https://github.com/Casperjuel/sponos/compare/v0.4.0...v0.5.0) (2026-10-07)
 
 
