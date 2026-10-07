@@ -104,9 +104,12 @@ fn write_settings(app: &App, s: &Settings) -> Res<()> {
 #[tauri::command]
 async fn save_settings(app: State<'_, App>, handle: AppHandle, mut settings: Settings) -> Res<()> {
     let hh = app.household().await;
+    let switched_app;
     {
         // the dialog doesn't round-trip per-system maps, so carry them over
         let cur = app.settings.lock().await;
+        // a login belongs to the Spotify app that made it
+        switched_app = cur.spotify_client_id != settings.spotify_client_id;
         settings.household_names = cur.household_names.clone();
         settings.preferred_household = cur.preferred_household.clone();
         settings.spotify_overrides = cur.spotify_overrides.clone();
@@ -119,6 +122,9 @@ async fn save_settings(app: State<'_, App>, handle: AppHandle, mut settings: Set
     write_settings(&app, &settings)?;
     *app.settings.lock().await = settings;
     app.spotify.reset_app_token().await;
+    if switched_app {
+        app.spotify.logout().await?;
+    }
     app.links.lock().await.remove(&hh);
     share(&app, handle, hh);
     Ok(())

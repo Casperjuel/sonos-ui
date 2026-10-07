@@ -311,11 +311,16 @@ impl Spotify {
             .await
             .map_err(|e| e.to_string())?;
         let status = res.status();
-        let v: Value = res.json().await.unwrap_or(Value::Null);
+        let text = res.text().await.unwrap_or_default();
+        let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
         if !status.is_success() {
             if status.as_u16() == 401 {
                 *self.app_token.lock().await = None;
                 *self.user_token.lock().await = None;
+            }
+            // development-mode apps only let allow-listed accounts in (plain-text body)
+            if status.as_u16() == 403 && text.to_lowercase().contains("registered") {
+                return Err(NOT_REGISTERED.into());
             }
             return Err(format!(
                 "Spotify {status}: {}",
@@ -329,7 +334,15 @@ impl Spotify {
         if !self.logged_in() {
             return Ok(None);
         }
-        let v = self.get(http, c, "/me", true).await?;
+        let v = match self.get(http, c, "/me", true).await {
+            Ok(v) => v,
+            Err(e) if e == NOT_REGISTERED => {
+                // don't stay half logged in: search would use this token and fail too
+                self.logout().await?;
+                return Err(e);
+            }
+            Err(e) => return Err(e),
+        };
         Ok(Some(Me {
             name: v["display_name"]
                 .as_str()
@@ -609,6 +622,8 @@ async fn embed_tracks(http: &reqwest::Client, kind: &str, id: &str) -> Res<Vec<S
     }
     Ok(tracks)
 }
+
+pub const NOT_REGISTERED: &str = "Your Spotify account isn't on this Spotify app's list of 5 users. Set up your own free Spotify app under Settings → Spotify, or ask the owner to add you.";
 
 /// A pasted Spotify link or URI (open.spotify.com/playlist/…, spotify:album:…)
 /// as something the app can open. Uses Spotify's public oEmbed for the name and
