@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    sonos_ui_lib::run()
+    sponos_lib::run()
 }

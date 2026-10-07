@@ -3,7 +3,7 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "package-name": "sonos-ui",
+      "package-name": "sponos",
       "include-component-in-tag": false,
       "extra-files": [
         {
