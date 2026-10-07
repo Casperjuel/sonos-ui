@@ -29,7 +29,12 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             }
         })
         .on_tray_icon_event(|tray, e| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = e
+            {
                 toggle(tray.app_handle());
             }
         })
@@ -37,14 +42,30 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
-fn build_menu<R: Runtime>(app: &AppHandle<R>, now: Option<&str>, playing: bool) -> tauri::Result<Menu<R>> {
-    let np = MenuItem::with_id(app, "np", now.unwrap_or("Nothing playing"), false, None::<&str>)?;
+fn build_menu<R: Runtime>(
+    app: &AppHandle<R>,
+    now: Option<&str>,
+    playing: bool,
+) -> tauri::Result<Menu<R>> {
+    let np = MenuItem::with_id(
+        app,
+        "np",
+        now.unwrap_or("Nothing playing"),
+        false,
+        None::<&str>,
+    )?;
     Menu::with_items(
         app,
         &[
             &np,
             &PredefinedMenuItem::separator(app)?,
-            &MenuItem::with_id(app, "toggle", if playing { "Pause" } else { "Play" }, true, None::<&str>)?,
+            &MenuItem::with_id(
+                app,
+                "toggle",
+                if playing { "Pause" } else { "Play" },
+                true,
+                None::<&str>,
+            )?,
             &MenuItem::with_id(app, "next", "Next", true, None::<&str>)?,
             &MenuItem::with_id(app, "previous", "Previous", true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
@@ -81,7 +102,12 @@ fn tray<R: Runtime>(app: &AppHandle<R>) -> Option<TrayIcon<R>> {
 
 /// Called from the frontend whenever the playing track changes.
 #[tauri::command]
-pub fn tray_update(app: AppHandle, title: Option<String>, artist: Option<String>, playing: bool) -> Result<(), String> {
+pub fn tray_update(
+    app: AppHandle,
+    title: Option<String>,
+    artist: Option<String>,
+    playing: bool,
+) -> Result<(), String> {
     let Some(t) = tray(&app) else { return Ok(()) };
     let full = match (&title, &artist) {
         (Some(t), Some(a)) if !a.is_empty() => Some(format!("{t} — {a}")),
@@ -91,7 +117,11 @@ pub fn tray_update(app: AppHandle, title: Option<String>, artist: Option<String>
     // keep the menu bar text short; the menu has the full line
     let short = title.as_ref().filter(|_| playing).map(|t| {
         let t: String = t.chars().take(28).collect();
-        if t.chars().count() < title.as_ref().unwrap().chars().count() { format!("{}…", t.trim_end()) } else { t }
+        if t.chars().count() < title.as_ref().unwrap().chars().count() {
+            format!("{}…", t.trim_end())
+        } else {
+            t
+        }
     });
     t.set_title(short.as_deref()).map_err(|e| e.to_string())?;
     t.set_tooltip(full.as_deref()).map_err(|e| e.to_string())?;
@@ -117,7 +147,7 @@ fn icon() -> Image<'static> {
             let dx = ((fx - cx).abs() - (hw - r)).max(0.0);
             let dy = ((fy - cy).abs() - (hh - r)).max(0.0);
             let d = (dx * dx + dy * dy).sqrt() - r; // signed distance to rounded rect
-            // 3px stroke just inside the edge, 1px anti-aliased falloff
+                                                    // 3px stroke just inside the edge, 1px anti-aliased falloff
             let stroke = (2.0 - (d + 1.5).abs()).clamp(0.0, 1.0);
             // woofer: ring around (22, 26) r=7, stroke 3
             let wd = ((fx - cx).powi(2) + (fy - 26.0).powi(2)).sqrt();

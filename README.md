@@ -9,6 +9,8 @@ A fast desktop controller for Sonos speakers on macOS, with Spotify search and q
 - Mini player and menu bar controls
 - Floorplan overview: place speakers on a plan, see what's playing, group rooms by dragging
 - Multiple Sonos systems (e.g. office and home): it switches automatically, and each system has its own floorplan
+- Shared floorplans: everyone on the same Sonos system sees the same plan, room names and Spotify link (end-to-end encrypted, see `sync/`)
+- Automatic updates from GitHub releases
 - Classic and glass themes
 
 ## Install
@@ -34,6 +36,18 @@ pnpm tauri dev
 Releases use [release-please](https://github.com/googleapis/release-please). Write [conventional commits](https://www.conventionalcommits.org) (`feat: …`, `fix: …`) on `main`, and release-please keeps a "release vX.Y.Z" pull request up to date. Merging that PR tags the release. GitHub Actions then builds a universal (Apple Silicon + Intel) app and attaches it as `Sponos.dmg`. The download link above always points at the newest release.
 
 The Spotify client ID is compiled in. Set the repository variable `SPOTIFY_CLIENT_ID` to use a different one. No secret is needed, because login uses PKCE.
+
+### Auto-updates
+
+Each release also publishes a signed update bundle and `latest.json`. Installed apps check for these on launch and every 6 hours, download the update in the background, and show a **Restart** button. Updates are signed with a minisign key: the public half is in `tauri.conf.json`, and the private half is in the `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets.
+
+### Shared floorplans (`sync/`)
+
+`sync/` is a tiny Vercel function backed by a private Vercel Blob store. It stores one blob per Sonos system:
+- The blob key is a hash of the household ID.
+- The contents are AES-256-GCM encrypted with a key derived from the same ID, so only devices that can reach the speakers can find or read a system's data.
+
+Deploy it with `vercel deploy --prod --cwd sync`. Build the app with `SPONOS_SYNC_URL` to point it at a different deployment. You can turn sharing off per device in Settings → Sonos.
 
 ### Signing and notarization
 

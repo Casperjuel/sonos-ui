@@ -251,6 +251,7 @@ section { margin-top: 18px; }
 
 .toasts { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 50; pointer-events: none; }
 .toast { background: var(--text); color: #000; padding: 9px 16px; border-radius: 999px; font-weight: 500; box-shadow: 0 8px 30px #0008; animation: rise .18s ease-out; max-width: 560px; }
+.update-pill { position: fixed; right: 18px; bottom: 18px; z-index: 50; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; border-radius: 999px; background: var(--raise); border: 1px solid var(--line); box-shadow: 0 8px 30px #0008; font-size: 13px; animation: rise .18s ease-out; }
 .toast.error { background: var(--red); color: #fff; border-radius: 12px; }
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
 

@@ -162,15 +162,31 @@ async fn probe_all(http: &reqwest::Client, ips: Vec<String>) -> Vec<(String, Vec
 #[tauri::command]
 async fn discover(app: State<'_, App>) -> Res<Discovery> {
     let s = app.settings.lock().await.clone();
-    let mut known: Vec<String> = app.groups.lock().await.iter().flat_map(|g| g.members.iter().map(|m| m.ip.clone())).collect();
+    let mut known: Vec<String> = app
+        .groups
+        .lock()
+        .await
+        .iter()
+        .flat_map(|g| g.members.iter().map(|m| m.ip.clone()))
+        .collect();
     known.extend(s.seed_ips.iter().cloned());
     known.dedup();
 
-    let (found_known, ssdp_ips) = tokio::join!(probe_all(&app.http, known.clone()), sonos::ssdp(Duration::from_millis(1500)));
+    let (found_known, ssdp_ips) = tokio::join!(
+        probe_all(&app.http, known.clone()),
+        sonos::ssdp(Duration::from_millis(1500))
+    );
     let mut systems: HashMap<String, Vec<Group>> = found_known.into_iter().collect();
     // only probe SSDP responders that aren't already part of a found system
-    let covered: Vec<String> = systems.values().flatten().flat_map(|g| g.members.iter().map(|m| m.ip.clone())).collect();
-    let fresh: Vec<String> = ssdp_ips.into_iter().filter(|ip| !covered.contains(ip) && !known.contains(ip)).collect();
+    let covered: Vec<String> = systems
+        .values()
+        .flatten()
+        .flat_map(|g| g.members.iter().map(|m| m.ip.clone()))
+        .collect();
+    let fresh: Vec<String> = ssdp_ips
+        .into_iter()
+        .filter(|ip| !covered.contains(ip) && !known.contains(ip))
+        .collect();
     for (hh, groups) in probe_all(&app.http, fresh).await {
         systems.entry(hh).or_insert(groups);
     }
@@ -184,23 +200,41 @@ async fn discover(app: State<'_, App>) -> Res<Discovery> {
         .flatten()
         .find(|h| systems.contains_key(h))
         // otherwise the biggest system on this network
-        .unwrap_or_else(|| systems.iter().max_by_key(|(_, g)| g.iter().map(|x| x.members.len()).sum::<usize>()).unwrap().0.clone());
+        .unwrap_or_else(|| {
+            systems
+                .iter()
+                .max_by_key(|(_, g)| g.iter().map(|x| x.members.len()).sum::<usize>())
+                .unwrap()
+                .0
+                .clone()
+        });
 
     let mut households: Vec<HouseholdInfo> = systems
         .iter()
-        .map(|(id, groups)| HouseholdInfo { id: id.clone(), name: household_name(&s, id, groups), speakers: groups.iter().map(|g| g.members.len()).sum() })
+        .map(|(id, groups)| HouseholdInfo {
+            id: id.clone(),
+            name: household_name(&s, id, groups),
+            speakers: groups.iter().map(|g| g.members.len()).sum(),
+        })
         .collect();
     households.sort_by(|a, b| a.name.cmp(&b.name));
     let groups = systems.remove(&active).unwrap_or_default();
     *app.groups.lock().await = groups.clone();
     *app.household.lock().await = Some(active.clone());
-    Ok(Discovery { households, active, groups })
+    Ok(Discovery {
+        households,
+        active,
+        groups,
+    })
 }
 
 fn household_name(s: &Settings, id: &str, groups: &[Group]) -> String {
     s.household_names.get(id).cloned().unwrap_or_else(|| {
         // until it's named: "Sonos · Kitchen" after its first room alphabetically
-        let mut rooms: Vec<&str> = groups.iter().flat_map(|g| g.members.iter().map(|m| m.name.as_str())).collect();
+        let mut rooms: Vec<&str> = groups
+            .iter()
+            .flat_map(|g| g.members.iter().map(|m| m.name.as_str()))
+            .collect();
         rooms.sort_unstable();
         format!("Sonos · {}", rooms.first().unwrap_or(&"?"))
     })
@@ -220,7 +254,12 @@ async fn set_household(app: State<'_, App>, id: String) -> Res<Discovery> {
 }
 
 #[tauri::command]
-async fn rename_household(app: State<'_, App>, handle: AppHandle, id: String, name: String) -> Res<()> {
+async fn rename_household(
+    app: State<'_, App>,
+    handle: AppHandle,
+    id: String,
+    name: String,
+) -> Res<()> {
     let mut s = app.settings.lock().await;
     let name = name.trim().to_string();
     if name.is_empty() {
@@ -260,7 +299,12 @@ async fn get_members(app: State<'_, App>, group: String) -> Res<Vec<MemberVol>> 
     let vols = sonos::member_volumes(&app.http, &g.members).await;
     Ok(g.members
         .into_iter()
-        .map(|m| MemberVol { volume: vols.get(&m.uuid).copied().unwrap_or(0), uuid: m.uuid, ip: m.ip, name: m.name })
+        .map(|m| MemberVol {
+            volume: vols.get(&m.uuid).copied().unwrap_or(0),
+            uuid: m.uuid,
+            ip: m.ip,
+            name: m.name,
+        })
         .collect())
 }
 
@@ -279,14 +323,20 @@ async fn control(app: State<'_, App>, group: String, action: String) -> Res<()> 
     match action.as_str() {
         "play" => {
             // nothing loaded (or a dead stream) → fall back to the queue
-            if sonos::soap(h, ip, Svc::AVTransport, "Play", "<Speed>1</Speed>").await.is_err() {
+            if sonos::soap(h, ip, Svc::AVTransport, "Play", "<Speed>1</Speed>")
+                .await
+                .is_err()
+            {
                 sonos::use_queue(h, ip, &g.coordinator_uuid).await?;
                 sonos::soap(h, ip, Svc::AVTransport, "Play", "<Speed>1</Speed>").await?;
             }
         }
         "pause" => {
             // streams can't pause, only stop
-            if sonos::soap(h, ip, Svc::AVTransport, "Pause", "").await.is_err() {
+            if sonos::soap(h, ip, Svc::AVTransport, "Pause", "")
+                .await
+                .is_err()
+            {
                 sonos::soap(h, ip, Svc::AVTransport, "Stop", "").await?;
             }
         }
@@ -300,10 +350,21 @@ async fn control(app: State<'_, App>, group: String, action: String) -> Res<()> 
 #[tauri::command]
 async fn seek(app: State<'_, App>, group: String, seconds: u32) -> Res<()> {
     let g = app.group(&group).await?;
-    let t = format!("{}:{:02}:{:02}", seconds / 3600, seconds / 60 % 60, seconds % 60);
-    sonos::soap(&app.http, &g.coordinator_ip, Svc::AVTransport, "Seek", &format!("<Unit>REL_TIME</Unit><Target>{t}</Target>"))
-        .await
-        .map(|_| ())
+    let t = format!(
+        "{}:{:02}:{:02}",
+        seconds / 3600,
+        seconds / 60 % 60,
+        seconds % 60
+    );
+    sonos::soap(
+        &app.http,
+        &g.coordinator_ip,
+        Svc::AVTransport,
+        "Seek",
+        &format!("<Unit>REL_TIME</Unit><Target>{t}</Target>"),
+    )
+    .await
+    .map(|_| ())
 }
 
 #[tauri::command]
@@ -315,17 +376,29 @@ async fn set_volume(app: State<'_, App>, group: String, volume: u32) -> Res<()> 
 #[tauri::command]
 async fn set_mute(app: State<'_, App>, group: String, muted: bool) -> Res<()> {
     let g = app.group(&group).await?;
-    sonos::soap(&app.http, &g.coordinator_ip, Svc::GroupRenderingControl, "SetGroupMute", &format!("<DesiredMute>{}</DesiredMute>", muted as u8))
-        .await
-        .map(|_| ())
+    sonos::soap(
+        &app.http,
+        &g.coordinator_ip,
+        Svc::GroupRenderingControl,
+        "SetGroupMute",
+        &format!("<DesiredMute>{}</DesiredMute>", muted as u8),
+    )
+    .await
+    .map(|_| ())
 }
 
 #[tauri::command]
 async fn set_play_mode(app: State<'_, App>, group: String, mode: String) -> Res<()> {
     let g = app.group(&group).await?;
-    sonos::soap(&app.http, &g.coordinator_ip, Svc::AVTransport, "SetPlayMode", &format!("<NewPlayMode>{}</NewPlayMode>", sonos::esc(&mode)))
-        .await
-        .map(|_| ())
+    sonos::soap(
+        &app.http,
+        &g.coordinator_ip,
+        Svc::AVTransport,
+        "SetPlayMode",
+        &format!("<NewPlayMode>{}</NewPlayMode>", sonos::esc(&mode)),
+    )
+    .await
+    .map(|_| ())
 }
 
 // ------------------------------------------------------------------ queue
@@ -339,9 +412,15 @@ async fn play_index(app: State<'_, App>, group: String, n: u32) -> Res<()> {
 #[tauri::command]
 async fn remove_index(app: State<'_, App>, group: String, n: u32) -> Res<()> {
     let g = app.group(&group).await?;
-    sonos::soap(&app.http, &g.coordinator_ip, Svc::AVTransport, "RemoveTrackFromQueue", &format!("<ObjectID>Q:0/{n}</ObjectID><UpdateID>0</UpdateID>"))
-        .await
-        .map(|_| ())
+    sonos::soap(
+        &app.http,
+        &g.coordinator_ip,
+        Svc::AVTransport,
+        "RemoveTrackFromQueue",
+        &format!("<ObjectID>Q:0/{n}</ObjectID><UpdateID>0</UpdateID>"),
+    )
+    .await
+    .map(|_| ())
 }
 
 #[tauri::command]
@@ -361,7 +440,15 @@ async fn move_index(app: State<'_, App>, group: String, from: u32, before: u32) 
 #[tauri::command]
 async fn clear_queue(app: State<'_, App>, group: String) -> Res<()> {
     let g = app.group(&group).await?;
-    sonos::soap(&app.http, &g.coordinator_ip, Svc::AVTransport, "RemoveAllTracksFromQueue", "").await.map(|_| ())
+    sonos::soap(
+        &app.http,
+        &g.coordinator_ip,
+        Svc::AVTransport,
+        "RemoveAllTracksFromQueue",
+        "",
+    )
+    .await
+    .map(|_| ())
 }
 
 // ------------------------------------------------------------------ spotify
@@ -396,13 +483,22 @@ async fn spotify_link(app: State<'_, App>, group: String) -> Res<SpotifyLink> {
 #[tauri::command]
 async fn spotify_search(app: State<'_, App>, q: String) -> Res<SearchResult> {
     let s = app.settings.lock().await.clone();
-    app.spotify.search(&app.http, &creds(&s), &q, market(&s)).await
+    app.spotify
+        .search(&app.http, &creds(&s), &q, market(&s))
+        .await
 }
 
 #[tauri::command]
-async fn spotify_children(app: State<'_, App>, kind: String, id: String, name: String) -> Res<Vec<SpItem>> {
+async fn spotify_children(
+    app: State<'_, App>,
+    kind: String,
+    id: String,
+    name: String,
+) -> Res<Vec<SpItem>> {
     let s = app.settings.lock().await.clone();
-    app.spotify.children(&app.http, &creds(&s), &kind, &id, &name, market(&s)).await
+    app.spotify
+        .children(&app.http, &creds(&s), &kind, &id, &name, market(&s))
+        .await
 }
 
 #[tauri::command]
@@ -411,7 +507,12 @@ async fn spotify_login(handle: tauri::AppHandle, app: State<'_, App>) -> Res<Opt
     let s = app.settings.lock().await.clone();
     let c = creds(&s);
     app.spotify
-        .login(&app.http, &c, |url| handle.opener().open_url(url, None::<&str>).map_err(|e| e.to_string()))
+        .login(&app.http, &c, |url| {
+            handle
+                .opener()
+                .open_url(url, None::<&str>)
+                .map_err(|e| e.to_string())
+        })
         .await?;
     app.spotify.me(&app.http, &c).await
 }
@@ -440,24 +541,44 @@ async fn spotify_player_queue(app: State<'_, App>) -> Res<Option<PlayerQueue>> {
 }
 
 fn creds(s: &Settings) -> Creds<'_> {
-    let id = if s.spotify_client_id.is_empty() { DEFAULT_CLIENT_ID } else { &s.spotify_client_id };
-    Creds { id, secret: &s.spotify_client_secret }
+    let id = if s.spotify_client_id.is_empty() {
+        DEFAULT_CLIENT_ID
+    } else {
+        &s.spotify_client_id
+    };
+    Creds {
+        id,
+        secret: &s.spotify_client_secret,
+    }
 }
 
 fn market(s: &Settings) -> &str {
-    if s.market.len() == 2 { &s.market } else { "DK" }
+    if s.market.len() == 2 {
+        &s.market
+    } else {
+        "DK"
+    }
 }
 
 /// mode: "end" (append), "next" (after current), "now" (insert after current and jump to it)
 #[tauri::command]
-async fn queue_spotify(app: State<'_, App>, group: String, kind: String, id: String, title: String, mode: String) -> Res<Queued> {
+async fn queue_spotify(
+    app: State<'_, App>,
+    group: String,
+    kind: String,
+    id: String,
+    title: String,
+    mode: String,
+) -> Res<Queued> {
     enqueue_items(&app, &group, &[QueueItem { kind, id, title }], &mode).await
 }
 
 #[tauri::command]
 async fn spotify_add_to_player_queue(app: State<'_, App>, id: String) -> Res<()> {
     let s = app.settings.lock().await.clone();
-    app.spotify.add_to_player_queue(&app.http, &creds(&s), &id).await
+    app.spotify
+        .add_to_player_queue(&app.http, &creds(&s), &id)
+        .await
 }
 
 #[derive(Serialize)]
@@ -478,7 +599,12 @@ struct QueueItem {
 
 /// Several items in order — e.g. a list of liked songs, which has no Sonos container.
 #[tauri::command]
-async fn queue_tracks(app: State<'_, App>, group: String, items: Vec<QueueItem>, mode: String) -> Res<Queued> {
+async fn queue_tracks(
+    app: State<'_, App>,
+    group: String,
+    items: Vec<QueueItem>,
+    mode: String,
+) -> Res<Queued> {
     enqueue_items(&app, &group, &items, &mode).await
 }
 
@@ -514,7 +640,10 @@ async fn enqueue_items(app: &App, group: &str, items: &[QueueItem], mode: &str) 
     if mode == "now" && first > 0 {
         sonos::play_track(h, ip, &g.coordinator_uuid, first).await?;
     }
-    Ok(Queued { added: total, placed })
+    Ok(Queued {
+        added: total,
+        placed,
+    })
 }
 
 // ------------------------------------------------------------------ overview / floorplan
@@ -536,12 +665,24 @@ async fn overview(app: State<'_, App>) -> Res<Vec<GroupOverview>> {
     for g in groups {
         let http = app.http.clone();
         set.spawn(async move {
-            let (st, volumes) = tokio::join!(sonos::state(&http, &g.coordinator_ip), sonos::member_volumes(&http, &g.members));
-            GroupOverview { group: g, state: st.ok(), volumes }
+            let (st, volumes) = tokio::join!(
+                sonos::state(&http, &g.coordinator_ip),
+                sonos::member_volumes(&http, &g.members)
+            );
+            GroupOverview {
+                group: g,
+                state: st.ok(),
+                volumes,
+            }
         });
     }
     let mut out = set.join_all().await;
-    out.sort_by(|a, b| a.group.name.to_lowercase().cmp(&b.group.name.to_lowercase()));
+    out.sort_by(|a, b| {
+        a.group
+            .name
+            .to_lowercase()
+            .cmp(&b.group.name.to_lowercase())
+    });
     Ok(out)
 }
 
@@ -553,7 +694,10 @@ async fn join_group(app: State<'_, App>, member_ip: String, coordinator_uuid: St
         &member_ip,
         Svc::AVTransport,
         "SetAVTransportURI",
-        &format!("<CurrentURI>x-rincon:{}</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>", sonos::esc(&coordinator_uuid)),
+        &format!(
+            "<CurrentURI>x-rincon:{}</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>",
+            sonos::esc(&coordinator_uuid)
+        ),
     )
     .await
     .map(|_| ())
@@ -562,9 +706,15 @@ async fn join_group(app: State<'_, App>, member_ip: String, coordinator_uuid: St
 /// Take a speaker out of its group so it plays on its own.
 #[tauri::command]
 async fn leave_group(app: State<'_, App>, member_ip: String) -> Res<()> {
-    sonos::soap(&app.http, &member_ip, Svc::AVTransport, "BecomeCoordinatorOfStandaloneGroup", "")
-        .await
-        .map(|_| ())
+    sonos::soap(
+        &app.http,
+        &member_ip,
+        Svc::AVTransport,
+        "BecomeCoordinatorOfStandaloneGroup",
+        "",
+    )
+    .await
+    .map(|_| ())
 }
 
 /// One floorplan per Sonos system: floorplan-<household>.json
@@ -573,8 +723,12 @@ async fn floorplan_path(app: &App) -> PathBuf {
 }
 
 fn floorplan_file(app: &App, household: &str) -> PathBuf {
-    let hh: String = household.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
-    app.settings_path.with_file_name(format!("floorplan-{hh}.json"))
+    let hh: String = household
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    app.settings_path
+        .with_file_name(format!("floorplan-{hh}.json"))
 }
 
 /// Floorplan image (data URL) + speaker positions, stored as opaque JSON.
@@ -587,7 +741,13 @@ async fn get_floorplan(app: State<'_, App>) -> Res<Option<String>> {
     // pre-multi-system single floorplan.json: adopt it for the system whose speakers it pins
     let legacy = app.settings_path.with_file_name("floorplan.json");
     if let Ok(s) = std::fs::read_to_string(&legacy) {
-        let ours = app.groups.lock().await.iter().flat_map(|g| g.members.iter()).any(|m| s.contains(&m.uuid));
+        let ours = app
+            .groups
+            .lock()
+            .await
+            .iter()
+            .flat_map(|g| g.members.iter())
+            .any(|m| s.contains(&m.uuid));
         if ours {
             let _ = std::fs::rename(&legacy, &path);
             return Ok(Some(s));
@@ -699,6 +859,8 @@ async fn sync_pull(app: State<'_, App>) -> Res<bool> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
@@ -713,13 +875,16 @@ pub fn run() {
                 settings.spotify_client_id.clear();
             }
             if settings.spotify_client_secret.is_empty() {
-                settings.spotify_client_secret = std::env::var("SPOTIFY_CLIENT_SECRET").unwrap_or_default();
+                settings.spotify_client_secret =
+                    std::env::var("SPOTIFY_CLIENT_SECRET").unwrap_or_default();
             }
             if settings.market.is_empty() {
                 settings.market = "DK".into();
             }
             app.manage(App {
-                http: reqwest::Client::builder().connect_timeout(Duration::from_secs(3)).build()?,
+                http: reqwest::Client::builder()
+                    .connect_timeout(Duration::from_secs(3))
+                    .build()?,
                 spotify: Spotify::new(dir.join("spotify.json")),
                 settings: Mutex::new(settings),
                 settings_path,

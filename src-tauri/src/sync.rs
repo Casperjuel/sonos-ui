@@ -38,7 +38,10 @@ pub enum Pulled {
     Unchanged,
     /// nobody has shared this system yet
     Missing,
-    Doc { etag: String, shared: Shared },
+    Doc {
+        etag: String,
+        shared: Shared,
+    },
 }
 
 fn digest(label: &str, household: &str) -> [u8; 32] {
@@ -46,7 +49,10 @@ fn digest(label: &str, household: &str) -> [u8; 32] {
 }
 
 fn doc_key(household: &str) -> String {
-    digest("doc", household).iter().map(|b| format!("{b:02x}")).collect()
+    digest("doc", household)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 fn url(household: &str) -> String {
@@ -62,7 +68,11 @@ fn seal(household: &str, shared: &Shared) -> Res<Vec<u8>> {
     let plain = serde_json::to_vec(shared).map_err(|e| e.to_string())?;
     let nonce: [u8; 12] = rand::rng().random();
     let mut out = nonce.to_vec();
-    out.extend(cipher(household).encrypt(&Nonce::from(nonce), plain.as_slice()).map_err(|_| "encrypt failed")?);
+    out.extend(
+        cipher(household)
+            .encrypt(&Nonce::from(nonce), plain.as_slice())
+            .map_err(|_| "encrypt failed")?,
+    );
     Ok(out)
 }
 
@@ -72,7 +82,9 @@ fn open(household: &str, data: &[u8]) -> Res<Shared> {
     }
     let (nonce, body) = data.split_at(12);
     let nonce: [u8; 12] = nonce.try_into().map_err(|_| "sync: bad nonce")?;
-    let plain = cipher(household).decrypt(&Nonce::from(nonce), body).map_err(|_| "sync: can't decrypt")?;
+    let plain = cipher(household)
+        .decrypt(&Nonce::from(nonce), body)
+        .map_err(|_| "sync: can't decrypt")?;
     serde_json::from_slice(&plain).map_err(|e| e.to_string())
 }
 
@@ -86,9 +98,17 @@ pub async fn pull(http: &reqwest::Client, household: &str, etag: Option<&str>) -
         304 => Ok(Pulled::Unchanged),
         404 => Ok(Pulled::Missing),
         200 => {
-            let etag = r.headers().get("etag").and_then(|v| v.to_str().ok()).unwrap_or_default().to_string();
+            let etag = r
+                .headers()
+                .get("etag")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or_default()
+                .to_string();
             let body = r.bytes().await.map_err(|e| e.to_string())?;
-            Ok(Pulled::Doc { etag, shared: open(household, &body)? })
+            Ok(Pulled::Doc {
+                etag,
+                shared: open(household, &body)?,
+            })
         }
         s => Err(format!("sync: HTTP {s}")),
     }
@@ -116,10 +136,17 @@ mod tests {
 
     #[test]
     fn roundtrip() {
-        let s = Shared { floorplan: Some("{\"pins\":{}}".into()), name: Some("Office".into()), spotify: Some((9, 34)) };
+        let s = Shared {
+            floorplan: Some("{\"pins\":{}}".into()),
+            name: Some("Office".into()),
+            spotify: Some((9, 34)),
+        };
         let sealed = seal("Sonos_abc", &s).unwrap();
         assert!(open("Sonos_abc", &sealed).unwrap() == s);
-        assert!(open("Sonos_other", &sealed).is_err(), "another household can't read it");
+        assert!(
+            open("Sonos_other", &sealed).is_err(),
+            "another household can't read it"
+        );
         assert_eq!(doc_key("Sonos_abc").len(), 64);
     }
 
@@ -129,10 +156,19 @@ mod tests {
     async fn live() {
         let http = reqwest::Client::new();
         let hh = format!("test-{}", rand::random::<u64>());
-        assert!(matches!(pull(&http, &hh, None).await.unwrap(), Pulled::Missing));
-        let s = Shared { name: Some("Test".into()), ..Default::default() };
+        assert!(matches!(
+            pull(&http, &hh, None).await.unwrap(),
+            Pulled::Missing
+        ));
+        let s = Shared {
+            name: Some("Test".into()),
+            ..Default::default()
+        };
         let etag = push(&http, &hh, &s).await.unwrap();
-        assert!(matches!(pull(&http, &hh, Some(&etag)).await.unwrap(), Pulled::Unchanged));
+        assert!(matches!(
+            pull(&http, &hh, Some(&etag)).await.unwrap(),
+            Pulled::Unchanged
+        ));
         match pull(&http, &hh, None).await.unwrap() {
             Pulled::Doc { shared, .. } => assert!(shared == s),
             _ => panic!("expected doc"),

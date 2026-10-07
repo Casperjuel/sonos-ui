@@ -42,7 +42,10 @@ impl Svc {
         }
     }
     fn has_instance(self) -> bool {
-        !matches!(self, Svc::ZoneGroupTopology | Svc::ContentDirectory | Svc::DeviceProperties)
+        !matches!(
+            self,
+            Svc::ZoneGroupTopology | Svc::ContentDirectory | Svc::DeviceProperties
+        )
     }
 }
 
@@ -91,8 +94,18 @@ fn attr(attrs: &str, name: &str) -> Option<String> {
 
 // ------------------------------------------------------------------ transport
 
-pub async fn soap(http: &reqwest::Client, ip: &str, svc: Svc, action: &str, args: &str) -> Res<String> {
-    let inst = if svc.has_instance() { "<InstanceID>0</InstanceID>" } else { "" };
+pub async fn soap(
+    http: &reqwest::Client,
+    ip: &str,
+    svc: Svc,
+    action: &str,
+    args: &str,
+) -> Res<String> {
+    let inst = if svc.has_instance() {
+        "<InstanceID>0</InstanceID>"
+    } else {
+        ""
+    };
     let body = format!(
         r#"<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:{action} xmlns:u="{urn}">{inst}{args}</u:{action}></s:Body></s:Envelope>"#,
         urn = svc.urn()
@@ -120,7 +133,9 @@ pub async fn soap(http: &reqwest::Client, ip: &str, svc: Svc, action: &str, args
 /// SSDP M-SEARCH. Replies arrive unicast on our ephemeral port; if the macOS
 /// firewall eats them we fall back to the seed IPs from settings.
 pub async fn ssdp(wait: Duration) -> Vec<String> {
-    let Ok(sock) = UdpSocket::bind("0.0.0.0:0").await else { return vec![] };
+    let Ok(sock) = UdpSocket::bind("0.0.0.0:0").await else {
+        return vec![];
+    };
     let msg = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 1\r\nST: urn:schemas-upnp-org:device:ZonePlayer:1\r\n\r\n";
     for _ in 0..2 {
         let _ = sock.send_to(msg.as_bytes(), "239.255.255.250:1900").await;
@@ -128,7 +143,8 @@ pub async fn ssdp(wait: Duration) -> Vec<String> {
     let mut found: Vec<String> = vec![];
     let mut buf = [0u8; 2048];
     let deadline = tokio::time::Instant::now() + wait;
-    while let Ok(Ok((_, from))) = tokio::time::timeout_at(deadline, sock.recv_from(&mut buf)).await {
+    while let Ok(Ok((_, from))) = tokio::time::timeout_at(deadline, sock.recv_from(&mut buf)).await
+    {
         if let IpAddr::V4(v4) = from.ip() {
             let s = v4.to_string();
             if !found.contains(&s) {
@@ -160,7 +176,8 @@ pub struct Group {
 pub async fn topology(http: &reqwest::Client, ip: &str) -> Res<Vec<Group>> {
     static GROUP: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"(?s)<ZoneGroup\s([^>]*)>(.*?)</ZoneGroup>").unwrap());
-    static MEMBER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<ZoneGroupMember\s([^>]*?)/?>").unwrap());
+    static MEMBER: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"<ZoneGroupMember\s([^>]*?)/?>").unwrap());
     static HOST: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^https?://([\d.]+):").unwrap());
 
     let r = soap(http, ip, Svc::ZoneGroupTopology, "GetZoneGroupState", "").await?;
@@ -181,12 +198,20 @@ pub async fn topology(http: &reqwest::Client, ip: &str) -> Res<Vec<Group>> {
                 })
             })
             .collect();
-        let Some(c) = members.iter().find(|m| m.uuid == coord).cloned() else { continue };
+        let Some(c) = members.iter().find(|m| m.uuid == coord).cloned() else {
+            continue;
+        };
         let name = match members.len() {
             1 => c.name.clone(),
             n => format!("{} + {}", c.name, n - 1),
         };
-        groups.push(Group { id, coordinator_uuid: c.uuid, coordinator_ip: c.ip, name, members });
+        groups.push(Group {
+            id,
+            coordinator_uuid: c.uuid,
+            coordinator_ip: c.ip,
+            name,
+            members,
+        });
     }
     groups.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(groups)
@@ -196,7 +221,9 @@ pub async fn topology(http: &reqwest::Client, ip: &str) -> Res<Vec<Group>> {
 /// networks, so it keys everything per-system (floorplan, Spotify link).
 pub async fn household_id(http: &reqwest::Client, ip: &str) -> Res<String> {
     let r = soap(http, ip, Svc::DeviceProperties, "GetHouseholdID", "").await?;
-    tag(&r, "CurrentHouseholdID").filter(|s| !s.is_empty()).ok_or_else(|| "no household id".into())
+    tag(&r, "CurrentHouseholdID")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "no household id".into())
 }
 
 // ------------------------------------------------------------------ DIDL
@@ -215,14 +242,20 @@ pub struct Item {
 
 fn art_url(ip: &str, raw: Option<String>) -> Option<String> {
     raw.filter(|s| !s.is_empty()).map(|s| {
-        if s.starts_with('/') { format!("http://{ip}:1400{s}") } else { s }
+        if s.starts_with('/') {
+            format!("http://{ip}:1400{s}")
+        } else {
+            s
+        }
     })
 }
 
 pub fn parse_didl(ip: &str, didl: &str) -> Vec<Item> {
-    static ITEM: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?s)<(item|container)\s([^>]*)>(.*?)</(?:item|container)>").unwrap());
-    static RES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)<res([^>]*)>([^<]*)</res>").unwrap());
+    static ITEM: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?s)<(item|container)\s([^>]*)>(.*?)</(?:item|container)>").unwrap()
+    });
+    static RES: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?s)<res([^>]*)>([^<]*)</res>").unwrap());
     ITEM.captures_iter(didl)
         .map(|c| {
             let body = &c[3];
@@ -241,7 +274,13 @@ pub fn parse_didl(ip: &str, didl: &str) -> Vec<Item> {
 }
 
 /// Browse a ContentDirectory container. Returns (items, total, raw result xml).
-pub async fn browse(http: &reqwest::Client, ip: &str, id: &str, start: u32, count: u32) -> Res<(Vec<Item>, u32, String)> {
+pub async fn browse(
+    http: &reqwest::Client,
+    ip: &str,
+    id: &str,
+    start: u32,
+    count: u32,
+) -> Res<(Vec<Item>, u32, String)> {
     let r = soap(
         http,
         ip,
@@ -255,7 +294,9 @@ pub async fn browse(http: &reqwest::Client, ip: &str, id: &str, start: u32, coun
     )
     .await?;
     let didl = tag(&r, "Result").unwrap_or_default();
-    let total = tag(&r, "TotalMatches").and_then(|s| s.parse().ok()).unwrap_or(0);
+    let total = tag(&r, "TotalMatches")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
     Ok((parse_didl(ip, &didl), total, didl))
 }
 
@@ -291,7 +332,9 @@ pub struct PlayerState {
 }
 
 pub fn hms(s: &str) -> u32 {
-    s.split(':').filter_map(|p| p.parse::<u32>().ok()).fold(0, |a, p| a * 60 + p)
+    s.split(':')
+        .filter_map(|p| p.parse::<u32>().ok())
+        .fold(0, |a, p| a * 60 + p)
 }
 
 pub async fn state(http: &reqwest::Client, ip: &str) -> Res<PlayerState> {
@@ -305,7 +348,10 @@ pub async fn state(http: &reqwest::Client, ip: &str) -> Res<PlayerState> {
     );
     let ti = ti?;
     let pi = pi.unwrap_or_default();
-    let media_uri = mi.ok().and_then(|m| tag(&m, "CurrentURI")).unwrap_or_default();
+    let media_uri = mi
+        .ok()
+        .and_then(|m| tag(&m, "CurrentURI"))
+        .unwrap_or_default();
     let meta = tag(&pi, "TrackMetaData").unwrap_or_default();
     let track = parse_didl(ip, &meta).into_iter().next().map(|mut t| {
         // radio streams put "artist - title" in streamContent
@@ -333,8 +379,15 @@ pub async fn state(http: &reqwest::Client, ip: &str) -> Res<PlayerState> {
     };
     Ok(PlayerState {
         transport: tag(&ti, "CurrentTransportState").unwrap_or_default(),
-        play_mode: ts.ok().and_then(|t| tag(&t, "PlayMode")).unwrap_or_else(|| "NORMAL".into()),
-        volume: vol.ok().and_then(|v| tag(&v, "CurrentVolume")).and_then(|v| v.parse().ok()).unwrap_or(0),
+        play_mode: ts
+            .ok()
+            .and_then(|t| tag(&t, "PlayMode"))
+            .unwrap_or_else(|| "NORMAL".into()),
+        volume: vol
+            .ok()
+            .and_then(|v| tag(&v, "CurrentVolume"))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0),
         muted: mute.ok().and_then(|m| tag(&m, "CurrentMute")).as_deref() == Some("1"),
         track_no: tag(&pi, "Track").and_then(|t| t.parse().ok()).unwrap_or(0),
         queue_active,
@@ -361,12 +414,28 @@ pub async fn use_queue(http: &reqwest::Client, ip: &str, uuid: &str) -> Res<()> 
 
 pub async fn play_track(http: &reqwest::Client, ip: &str, uuid: &str, n: u32) -> Res<()> {
     use_queue(http, ip, uuid).await?;
-    soap(http, ip, Svc::AVTransport, "Seek", &format!("<Unit>TRACK_NR</Unit><Target>{n}</Target>")).await?;
-    soap(http, ip, Svc::AVTransport, "Play", "<Speed>1</Speed>").await.map(|_| ())
+    soap(
+        http,
+        ip,
+        Svc::AVTransport,
+        "Seek",
+        &format!("<Unit>TRACK_NR</Unit><Target>{n}</Target>"),
+    )
+    .await?;
+    soap(http, ip, Svc::AVTransport, "Play", "<Speed>1</Speed>")
+        .await
+        .map(|_| ())
 }
 
 /// Returns (first track number enqueued, number added).
-pub async fn enqueue(http: &reqwest::Client, ip: &str, uri: &str, meta: &str, at: u32, as_next: bool) -> Res<(u32, u32)> {
+pub async fn enqueue(
+    http: &reqwest::Client,
+    ip: &str,
+    uri: &str,
+    meta: &str,
+    at: u32,
+    as_next: bool,
+) -> Res<(u32, u32)> {
     let r = soap(
         http,
         ip,
@@ -387,21 +456,40 @@ pub async fn enqueue(http: &reqwest::Client, ip: &str, uri: &str, meta: &str, at
 
 pub async fn set_group_volume(http: &reqwest::Client, ip: &str, v: u32) -> Res<()> {
     // SnapshotGroupVolume fixes the member ratios so SetGroupVolume scales proportionally
-    soap(http, ip, Svc::GroupRenderingControl, "SnapshotGroupVolume", "").await?;
-    soap(http, ip, Svc::GroupRenderingControl, "SetGroupVolume", &format!("<DesiredVolume>{}</DesiredVolume>", v.min(100)))
-        .await
-        .map(|_| ())
+    soap(
+        http,
+        ip,
+        Svc::GroupRenderingControl,
+        "SnapshotGroupVolume",
+        "",
+    )
+    .await?;
+    soap(
+        http,
+        ip,
+        Svc::GroupRenderingControl,
+        "SetGroupVolume",
+        &format!("<DesiredVolume>{}</DesiredVolume>", v.min(100)),
+    )
+    .await
+    .map(|_| ())
 }
 
 pub async fn member_volumes(http: &reqwest::Client, members: &[Member]) -> HashMap<String, u32> {
     let mut out = HashMap::new();
     for m in members {
-        let v = soap(http, &m.ip, Svc::RenderingControl, "GetVolume", "<Channel>Master</Channel>")
-            .await
-            .ok()
-            .and_then(|r| tag(&r, "CurrentVolume"))
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0);
+        let v = soap(
+            http,
+            &m.ip,
+            Svc::RenderingControl,
+            "GetVolume",
+            "<Channel>Master</Channel>",
+        )
+        .await
+        .ok()
+        .and_then(|r| tag(&r, "CurrentVolume"))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
         out.insert(m.uuid.clone(), v);
     }
     out
@@ -413,7 +501,10 @@ pub async fn set_member_volume(http: &reqwest::Client, ip: &str, v: u32) -> Res<
         ip,
         Svc::RenderingControl,
         "SetVolume",
-        &format!("<Channel>Master</Channel><DesiredVolume>{}</DesiredVolume>", v.min(100)),
+        &format!(
+            "<Channel>Master</Channel><DesiredVolume>{}</DesiredVolume>",
+            v.min(100)
+        ),
     )
     .await
     .map(|_| ())
@@ -436,7 +527,12 @@ pub struct SpotifyLink {
 impl SpotifyLink {
     pub fn fallback(sid: u32, sn: u32) -> Self {
         let svc = sid * 256 + 7;
-        Self { sid, sn, desc: format!("SA_RINCON{svc}_X_#Svc{svc}-0-Token"), detected: false }
+        Self {
+            sid,
+            sn,
+            desc: format!("SA_RINCON{svc}_X_#Svc{svc}-0-Token"),
+            detected: false,
+        }
     }
 
     /// kind: track | album | playlist | artist
@@ -448,12 +544,22 @@ impl SpotifyLink {
             "artist" => ("100e206c", "object.container.playlistContainer", true),
             _ => return Err(format!("can't queue a {kind}")),
         };
-        let sp_kind = if kind == "artist" { "artistTopTracks" } else { kind };
+        let sp_kind = if kind == "artist" {
+            "artistTopTracks"
+        } else {
+            kind
+        };
         let item_id = format!("{prefix}spotify%3a{sp_kind}%3a{id}");
         let uri = if container {
-            format!("x-rincon-cpcontainer:{item_id}?sid={}&flags=8300&sn={}", self.sid, self.sn)
+            format!(
+                "x-rincon-cpcontainer:{item_id}?sid={}&flags=8300&sn={}",
+                self.sid, self.sn
+            )
         } else {
-            format!("x-sonos-spotify:spotify%3atrack%3a{id}?sid={}&flags=8232&sn={}", self.sid, self.sn)
+            format!(
+                "x-sonos-spotify:spotify%3atrack%3a{id}?sid={}&flags=8232&sn={}",
+                self.sid, self.sn
+            )
         };
         let meta = format!(
             r#"<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="{item_id}" parentID="" restricted="true"><dc:title>{}</dc:title><upnp:class>{class}</upnp:class><desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">{}</desc></item></DIDL-Lite>"#,
@@ -465,9 +571,11 @@ impl SpotifyLink {
 }
 
 pub async fn detect_spotify(http: &reqwest::Client, ip: &str) -> Option<SpotifyLink> {
-    static URI: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"spotify[^<\s]*?\?sid=(\d+)&(?:amp;)?flags=\d+&(?:amp;)?sn=(\d+)").unwrap());
-    static DESC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"SA_RINCON(\d+)_X_#Svc\d+-[^<&]*-Token").unwrap());
+    static URI: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"spotify[^<\s]*?\?sid=(\d+)&(?:amp;)?flags=\d+&(?:amp;)?sn=(\d+)").unwrap()
+    });
+    static DESC: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"SA_RINCON(\d+)_X_#Svc\d+-[^<&]*-Token").unwrap());
     let mut text = String::new();
     for id in ["FV:2", "Q:0"] {
         if let Ok((_, _, raw)) = browse(http, ip, id, 0, 100).await {
@@ -482,7 +590,12 @@ pub async fn detect_spotify(http: &reqwest::Client, ip: &str) -> Option<SpotifyL
         .find(|d| d[1] == svc)
         .map(|d| d[0].to_string())
         .unwrap_or_else(|| SpotifyLink::fallback(sid, sn).desc);
-    Some(SpotifyLink { sid, sn, desc, detected: true })
+    Some(SpotifyLink {
+        sid,
+        sn,
+        desc,
+        detected: true,
+    })
 }
 
 #[cfg(test)]
@@ -500,8 +613,19 @@ mod live {
         for g in &groups {
             let st = state(&http, &g.coordinator_ip).await.unwrap();
             let q = queue(&http, &g.coordinator_ip).await.unwrap();
-            println!("{} [{}] {:?} vol={} q={} track={:?}", g.name, st.transport, st.source, st.volume, q.len(), st.track.map(|t| t.title));
+            println!(
+                "{} [{}] {:?} vol={} q={} track={:?}",
+                g.name,
+                st.transport,
+                st.source,
+                st.volume,
+                q.len(),
+                st.track.map(|t| t.title)
+            );
         }
-        println!("{:?}", detect_spotify(&http, &groups[0].coordinator_ip).await);
+        println!(
+            "{:?}",
+            detect_spotify(&http, &groups[0].coordinator_ip).await
+        );
     }
 }

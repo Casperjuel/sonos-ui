@@ -85,7 +85,11 @@ struct Stored {
 
 impl Spotify {
     pub fn new(refresh_path: PathBuf) -> Self {
-        Self { app_token: Default::default(), user_token: Default::default(), refresh_path }
+        Self {
+            app_token: Default::default(),
+            user_token: Default::default(),
+            refresh_path,
+        }
     }
 
     pub async fn reset_app_token(&self) {
@@ -93,14 +97,18 @@ impl Spotify {
     }
 
     fn refresh_token(&self) -> Option<String> {
-        let s: Stored = serde_json::from_str(&std::fs::read_to_string(&self.refresh_path).ok()?).ok()?;
+        let s: Stored =
+            serde_json::from_str(&std::fs::read_to_string(&self.refresh_path).ok()?).ok()?;
         Some(s.refresh_token).filter(|t| !t.is_empty())
     }
 
     fn store_refresh(&self, token: Option<&str>) -> Res<()> {
         match token {
             Some(t) => {
-                let json = serde_json::to_string(&Stored { refresh_token: t.into() }).unwrap();
+                let json = serde_json::to_string(&Stored {
+                    refresh_token: t.into(),
+                })
+                .unwrap();
                 std::fs::write(&self.refresh_path, json).map_err(|e| e.to_string())
             }
             None => {
@@ -121,20 +129,34 @@ impl Spotify {
 
     // -------------------------------------------------------------- tokens
 
-    async fn token_request(http: &reqwest::Client, body: String, basic: Option<&Creds<'_>>) -> Res<Value> {
+    async fn token_request(
+        http: &reqwest::Client,
+        body: String,
+        basic: Option<&Creds<'_>>,
+    ) -> Res<Value> {
         let mut req = http
             .post("https://accounts.spotify.com/api/token")
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body);
         if let Some(c) = basic {
-            let b = base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", c.id, c.secret));
+            let b =
+                base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", c.id, c.secret));
             req = req.header("Authorization", format!("Basic {b}"));
         }
-        let v: Value = req.send().await.map_err(|e| e.to_string())?.json().await.map_err(|e| e.to_string())?;
+        let v: Value = req
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
         if v["access_token"].is_null() {
             return Err(format!(
                 "Spotify auth failed: {}",
-                v["error_description"].as_str().or(v["error"].as_str()).unwrap_or("unknown error")
+                v["error_description"]
+                    .as_str()
+                    .or(v["error"].as_str())
+                    .unwrap_or("unknown error")
             ));
         }
         Ok(v)
@@ -166,7 +188,9 @@ impl Spotify {
         if let Some((t, _)) = slot.as_ref().filter(|(_, e)| Instant::now() < *e) {
             return Ok(Some(t.clone()));
         }
-        let Some(refresh) = self.refresh_token() else { return Ok(None) };
+        let Some(refresh) = self.refresh_token() else {
+            return Ok(None);
+        };
         let body = format!(
             "grant_type=refresh_token&refresh_token={}&client_id={}",
             urlencoding::encode(&refresh),
@@ -176,7 +200,10 @@ impl Spotify {
             Ok(v) => v,
             Err(e) => {
                 // revoked or expired login — forget it so the UI offers a fresh one
-                if e.contains("invalid_grant") || e.contains("revoked") || e.contains("Invalid refresh") {
+                if e.contains("invalid_grant")
+                    || e.contains("revoked")
+                    || e.contains("Invalid refresh")
+                {
                     self.store_refresh(None)?;
                 }
                 return Err(e);
@@ -191,7 +218,12 @@ impl Spotify {
 
     /// Browser login. Opens the consent page via `open`, waits for Spotify to
     /// redirect back to the loopback listener, then swaps the code for tokens.
-    pub async fn login(&self, http: &reqwest::Client, c: &Creds<'_>, open: impl FnOnce(String) -> Res<()>) -> Res<()> {
+    pub async fn login(
+        &self,
+        http: &reqwest::Client,
+        c: &Creds<'_>,
+        open: impl FnOnce(String) -> Res<()>,
+    ) -> Res<()> {
         if c.id.is_empty() {
             return Err("Add your Spotify client ID in Settings first".into());
         }
@@ -199,9 +231,9 @@ impl Spotify {
         let challenge = B64URL.encode(sha2::Sha256::digest(verifier.as_bytes()));
         let state = random_string(16);
 
-        let listener = TcpListener::bind("127.0.0.1:8888")
-            .await
-            .map_err(|e| format!("Couldn't listen on 127.0.0.1:8888 for the login redirect: {e}"))?;
+        let listener = TcpListener::bind("127.0.0.1:8888").await.map_err(|e| {
+            format!("Couldn't listen on 127.0.0.1:8888 for the login redirect: {e}")
+        })?;
 
         open(format!(
             "https://accounts.spotify.com/authorize?response_type=code&client_id={}&scope={}&redirect_uri={}&state={state}&code_challenge_method=S256&code_challenge={challenge}",
@@ -256,10 +288,18 @@ impl Spotify {
 
     // -------------------------------------------------------------- requests
 
-    async fn get(&self, http: &reqwest::Client, c: &Creds<'_>, path: &str, need_user: bool) -> Res<Value> {
+    async fn get(
+        &self,
+        http: &reqwest::Client,
+        c: &Creds<'_>,
+        path: &str,
+        need_user: bool,
+    ) -> Res<Value> {
         let token = match self.user_token(http, c).await {
             Ok(Some(t)) => t,
-            Ok(None) | Err(_) if need_user => return Err("Log in to Spotify in Settings to see your library".into()),
+            Ok(None) | Err(_) if need_user => {
+                return Err("Log in to Spotify in Settings to see your library".into())
+            }
             _ => self.app_token(http, c).await?,
         };
         let res = http
@@ -275,7 +315,10 @@ impl Spotify {
                 *self.app_token.lock().await = None;
                 *self.user_token.lock().await = None;
             }
-            return Err(format!("Spotify {status}: {}", v["error"]["message"].as_str().unwrap_or("")));
+            return Err(format!(
+                "Spotify {status}: {}",
+                v["error"]["message"].as_str().unwrap_or("")
+            ));
         }
         Ok(v)
     }
@@ -286,12 +329,22 @@ impl Spotify {
         }
         let v = self.get(http, c, "/me", true).await?;
         Ok(Some(Me {
-            name: v["display_name"].as_str().or(v["id"].as_str()).unwrap_or("Spotify").into(),
+            name: v["display_name"]
+                .as_str()
+                .or(v["id"].as_str())
+                .unwrap_or("Spotify")
+                .into(),
             image: image(&v),
         }))
     }
 
-    pub async fn search(&self, http: &reqwest::Client, c: &Creds<'_>, q: &str, market: &str) -> Res<SearchResult> {
+    pub async fn search(
+        &self,
+        http: &reqwest::Client,
+        c: &Creds<'_>,
+        q: &str,
+        market: &str,
+    ) -> Res<SearchResult> {
         let v = self
             .get(
                 http,
@@ -332,7 +385,11 @@ impl Spotify {
                 }
             }
             match v["next"].as_str() {
-                Some(next) => path = next.trim_start_matches("https://api.spotify.com/v1").to_string(),
+                Some(next) => {
+                    path = next
+                        .trim_start_matches("https://api.spotify.com/v1")
+                        .to_string()
+                }
                 None => break,
             }
         }
@@ -341,26 +398,40 @@ impl Spotify {
 
     /// What Spotify Connect is playing for the logged-in user. Only meaningful
     /// when that user is the one casting to Sonos. `None` when not logged in.
-    pub async fn player_queue(&self, http: &reqwest::Client, c: &Creds<'_>) -> Res<Option<PlayerQueue>> {
+    pub async fn player_queue(
+        &self,
+        http: &reqwest::Client,
+        c: &Creds<'_>,
+    ) -> Res<Option<PlayerQueue>> {
         if !self.logged_in() {
             return Ok(None);
         }
         let v = self.get(http, c, "/me/player/queue", true).await?;
         Ok(Some(PlayerQueue {
             current: track(&v["currently_playing"], None),
-            queue: v["queue"].as_array().map(|a| a.iter().filter_map(|t| track(t, None)).collect()).unwrap_or_default(),
+            queue: v["queue"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|t| track(t, None)).collect())
+                .unwrap_or_default(),
         }))
     }
 
     /// Add a track to the logged-in user's Spotify Connect queue — the only
     /// way to make something "play next" while that user is casting.
-    pub async fn add_to_player_queue(&self, http: &reqwest::Client, c: &Creds<'_>, track_id: &str) -> Res<()> {
+    pub async fn add_to_player_queue(
+        &self,
+        http: &reqwest::Client,
+        c: &Creds<'_>,
+        track_id: &str,
+    ) -> Res<()> {
         let Some(token) = self.user_token(http, c).await? else {
             return Err("Log in to Spotify first".into());
         };
         let uri = urlencoding::encode(&format!("spotify:track:{track_id}")).into_owned();
         let res = http
-            .post(format!("https://api.spotify.com/v1/me/player/queue?uri={uri}"))
+            .post(format!(
+                "https://api.spotify.com/v1/me/player/queue?uri={uri}"
+            ))
             .bearer_auth(token)
             .header("Content-Length", "0")
             .send()
@@ -372,40 +443,85 @@ impl Spotify {
         let status = res.status();
         let v: Value = res.json().await.unwrap_or(Value::Null);
         let msg = v["error"]["message"].as_str().unwrap_or("");
-        Err(if status.as_u16() == 403 && msg.to_lowercase().contains("scope") {
-            "Log out and in to Spotify again to allow queueing (new permission)".into()
-        } else {
-            format!("Spotify {status}: {msg}")
-        })
+        Err(
+            if status.as_u16() == 403 && msg.to_lowercase().contains("scope") {
+                "Log out and in to Spotify again to allow queueing (new permission)".into()
+            } else {
+                format!("Spotify {status}: {msg}")
+            },
+        )
     }
 
     /// Tracks inside an album / playlist / artist / liked songs, for drill-in.
-    pub async fn children(&self, http: &reqwest::Client, c: &Creds<'_>, kind: &str, id: &str, name: &str, market: &str) -> Res<Vec<SpItem>> {
+    pub async fn children(
+        &self,
+        http: &reqwest::Client,
+        c: &Creds<'_>,
+        kind: &str,
+        id: &str,
+        name: &str,
+        market: &str,
+    ) -> Res<Vec<SpItem>> {
         match kind {
             "album" => {
-                let v = self.get(http, c, &format!("/albums/{id}?market={market}"), false).await?;
+                let v = self
+                    .get(http, c, &format!("/albums/{id}?market={market}"), false)
+                    .await?;
                 let img = image(&v);
                 Ok(list(&v["tracks"], |t| track(t, img.as_ref())))
             }
             "playlist" => {
-                let v = match self.get(http, c, &format!("/playlists/{id}/items?limit=100&market={market}"), true).await {
+                let v = match self
+                    .get(
+                        http,
+                        c,
+                        &format!("/playlists/{id}/items?limit=100&market={market}"),
+                        true,
+                    )
+                    .await
+                {
                     Ok(v) => v,
                     // dev-mode apps only get contents of playlists the user owns or collaborates on
                     // (and need a login at all) — the public embed player isn't restricted
-                    Err(e) if e.contains("403") || e.contains("Log in") => return embed_tracks(http, "playlist", id).await,
+                    Err(e) if e.contains("403") || e.contains("Log in") => {
+                        return embed_tracks(http, "playlist", id).await
+                    }
                     Err(e) => return Err(e),
                 };
                 // renamed in 2026: items[].item, older shape items[].track
                 Ok(v["items"]
                     .as_array()
-                    .map(|a| a.iter().filter_map(|i| track(if i["item"].is_object() { &i["item"] } else { &i["track"] }, None)).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|i| {
+                                track(
+                                    if i["item"].is_object() {
+                                        &i["item"]
+                                    } else {
+                                        &i["track"]
+                                    },
+                                    None,
+                                )
+                            })
+                            .collect()
+                    })
                     .unwrap_or_default())
             }
             "liked" => {
                 let mut out = vec![];
                 for offset in [0, 50] {
-                    let v = self.get(http, c, &format!("/me/tracks?limit=50&offset={offset}&market={market}"), true).await?;
-                    let page: Vec<_> = v["items"].as_array().map(|a| a.iter().filter_map(|i| track(&i["track"], None)).collect()).unwrap_or_default();
+                    let v = self
+                        .get(
+                            http,
+                            c,
+                            &format!("/me/tracks?limit=50&offset={offset}&market={market}"),
+                            true,
+                        )
+                        .await?;
+                    let page: Vec<_> = v["items"]
+                        .as_array()
+                        .map(|a| a.iter().filter_map(|i| track(&i["track"], None)).collect())
+                        .unwrap_or_default();
                     let done = page.len() < 50;
                     out.extend(page);
                     if done {
@@ -418,7 +534,15 @@ impl Spotify {
             "artist" => {
                 let q = format!("artist:\"{}\"", name.replace('"', ""));
                 let v = self
-                    .get(http, c, &format!("/search?q={}&type=track&limit=10&market={market}", urlencoding::encode(&q)), false)
+                    .get(
+                        http,
+                        c,
+                        &format!(
+                            "/search?q={}&type=track&limit=10&market={market}",
+                            urlencoding::encode(&q)
+                        ),
+                        false,
+                    )
                     .await?;
                 Ok(list(&v["tracks"], |t| track(t, None)))
             }
@@ -443,7 +567,9 @@ async fn embed_tracks(http: &reqwest::Client, kind: &str, id: &str) -> Res<Vec<S
         .text()
         .await
         .map_err(|e| e.to_string())?;
-    let start = html.find(r#"<script id="__NEXT_DATA__""#).ok_or("NOT_OWNER")?;
+    let start = html
+        .find(r#"<script id="__NEXT_DATA__""#)
+        .ok_or("NOT_OWNER")?;
     let json = &html[start..];
     let json = &json[json.find('>').ok_or("NOT_OWNER")? + 1..];
     let json = &json[..json.find("</script>").ok_or("NOT_OWNER")?];
@@ -451,7 +577,11 @@ async fn embed_tracks(http: &reqwest::Client, kind: &str, id: &str) -> Res<Vec<S
     let entity = &v["props"]["pageProps"]["state"]["data"]["entity"];
     let cover = entity["visualIdentity"]["image"]
         .as_array()
-        .and_then(|a| a.iter().find(|i| i["maxWidth"].as_u64().unwrap_or(0) >= 64).or(a.first()))
+        .and_then(|a| {
+            a.iter()
+                .find(|i| i["maxWidth"].as_u64().unwrap_or(0) >= 64)
+                .or(a.first())
+        })
         .and_then(|i| i["url"].as_str())
         .map(String::from);
     let tracks: Vec<SpItem> = entity["trackList"]
@@ -484,8 +614,20 @@ mod live {
     #[tokio::test]
     #[ignore]
     async fn embed_lists_a_playlist_we_dont_own() {
-        let t = super::embed_tracks(&reqwest::Client::new(), "playlist", "6vDGVr652ztNWKZuHvsFvx").await.unwrap();
-        println!("{} tracks, first: {} — {} ({:?})", t.len(), t[0].name, t[0].subtitle, t[0].image);
+        let t = super::embed_tracks(
+            &reqwest::Client::new(),
+            "playlist",
+            "6vDGVr652ztNWKZuHvsFvx",
+        )
+        .await
+        .unwrap();
+        println!(
+            "{} tracks, first: {} — {} ({:?})",
+            t.len(),
+            t[0].name,
+            t[0].subtitle,
+            t[0].image
+        );
         assert!(t.len() > 10 && t[0].image.is_some());
     }
 }
@@ -496,7 +638,9 @@ fn random_string(n: usize) -> String {
     use rand::RngExt;
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let mut rng = rand::rng();
-    (0..n).map(|_| CHARS[rng.random_range(0..CHARS.len())] as char).collect()
+    (0..n)
+        .map(|_| CHARS[rng.random_range(0..CHARS.len())] as char)
+        .collect()
 }
 
 fn query_params(path: &str) -> std::collections::HashMap<String, String> {
@@ -505,7 +649,14 @@ fn query_params(path: &str) -> std::collections::HashMap<String, String> {
         .unwrap_or("")
         .split('&')
         .filter_map(|kv| kv.split_once('='))
-        .map(|(k, v)| (k.to_string(), urlencoding::decode(v).map(|s| s.into_owned()).unwrap_or_default()))
+        .map(|(k, v)| {
+            (
+                k.to_string(),
+                urlencoding::decode(v)
+                    .map(|s| s.into_owned())
+                    .unwrap_or_default(),
+            )
+        })
         .collect()
 }
 
@@ -522,7 +673,12 @@ fn image(v: &Value) -> Option<String> {
 
 fn names(v: &Value) -> String {
     v.as_array()
-        .map(|a| a.iter().filter_map(|x| x["name"].as_str()).collect::<Vec<_>>().join(", "))
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x["name"].as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
         .unwrap_or_default()
 }
 
@@ -545,7 +701,15 @@ fn album(a: &Value) -> Option<SpItem> {
         kind: "album".into(),
         id: a["id"].as_str()?.into(),
         name: a["name"].as_str()?.into(),
-        subtitle: format!("{} · {}", names(&a["artists"]), a["release_date"].as_str().unwrap_or("").get(..4).unwrap_or("")),
+        subtitle: format!(
+            "{} · {}",
+            names(&a["artists"]),
+            a["release_date"]
+                .as_str()
+                .unwrap_or("")
+                .get(..4)
+                .unwrap_or("")
+        ),
         image: image(a),
         duration_ms: None,
     })
@@ -564,5 +728,8 @@ fn playlist(p: &Value) -> Option<SpItem> {
 
 fn list(v: &Value, f: impl Fn(&Value) -> Option<SpItem>) -> Vec<SpItem> {
     // search can return `null` entries — filter_map drops them
-    v["items"].as_array().map(|a| a.iter().filter_map(&f).collect()).unwrap_or_default()
+    v["items"]
+        .as_array()
+        .map(|a| a.iter().filter_map(&f).collect())
+        .unwrap_or_default()
 }

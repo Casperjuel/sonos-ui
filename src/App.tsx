@@ -7,6 +7,7 @@ import { Mini, type NextUp } from "./Mini";
 import { Overview } from "./Overview";
 import { accentFrom, setAccent } from "./theme";
 import { TopBar } from "./TopBar";
+import { UpdatePill } from "./Updater";
 import { Sidebar } from "./Sidebar";
 import { Browse } from "./Browse";
 import { Queue } from "./Queue";
@@ -404,6 +405,7 @@ export default function App() {
           toast={toast}
         />
       )}
+      <UpdatePill />
       <div className="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.error ? "error" : ""}`}>

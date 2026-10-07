@@ -46,6 +46,16 @@
     "macOS": {
       "minimumSystemVersion": "12.0",
       "signingIdentity": "-"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "requireSignedVersion": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJBRDM3MDVCQzJFNzY5RjQKUldUMGFlZkNXM0RUdXFaR2FMWjNhZFVCM1pKd0U4a1hod0ZsR2dLeDRaWG1YcUUrT2JQdmZMQXMK",
+      "endpoints": [
+        "https://github.com/casperjuel/sponos/releases/latest/download/latest.json"
+      ]
     }
   }
 }
