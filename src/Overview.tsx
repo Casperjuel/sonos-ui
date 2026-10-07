@@ -27,19 +27,35 @@ type Props = {
   onOpenRoom: (groupId: string) => void;
 };
 
+/** zoom limits; 1 = the plan fitted to the window */
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 6;
+type View = { k: number; x: number; y: number };
+const FIT: View = { k: 1, x: 0, y: 0 };
+
 export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Props) {
   const [data, setData] = useState<GroupOverview[]>([]);
   const [fp, setFp] = useState<Floorplan | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [hoverGroup, setHoverGroup] = useState<string | null>(null);
+  /** speakers can only be moved while organizing, so panning never moves one by accident */
+  const [organize, setOrganize] = useState(false);
   /** click-to-place: a speaker picked from the side list, waiting for a click on the plan */
   const [placing, setPlacing] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ uuid: string; x: number; y: number; target: string | null } | null>(null);
   const dragStart = useRef<{ px: number; py: number; x: number; y: number; moved: boolean } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [aspect, setAspect] = useState(16 / 10);
-  const [stage, setStage] = useState({ w: 0, h: 0 });
+  /** the fitted plan size and the space around it */
+  const [geo, setGeo] = useState({ W: 0, H: 0, w: 0, h: 0 });
+  const geoRef = useRef(geo);
+  geoRef.current = geo;
+  const [view, setView] = useState<View>(FIT);
+  /** buttons, keys and double-clicks glide; gestures follow the fingers */
+  const [gliding, setGliding] = useState(false);
+  const [panning, setPanning] = useState(false);
 
   // ---- data
   const refresh = useCallback(() => api.overview().then(setData).catch(() => {}), []);
@@ -48,8 +64,14 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
     const t = setInterval(refresh, 2000);
     return () => clearInterval(t);
   }, [refresh]);
+  const firstLoad = useRef(true);
   useEffect(() => {
-    api.getFloorplan().then(setFp);
+    api.getFloorplan().then((f) => {
+      setFp(f);
+      // nothing placed yet: start in organize mode
+      if (firstLoad.current) setOrganize(!Object.keys(f.pins).length);
+      firstLoad.current = false;
+    });
   }, [syncTick]);
 
   const save = (next: Floorplan) => {
@@ -71,14 +93,15 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
   const placed = speakers.filter((s) => fp?.pins[s.uuid]);
   const unplaced = speakers.filter((s) => !fp?.pins[s.uuid]);
 
-  // ---- fit the stage to the plan's aspect ratio inside the available space
+  // ---- fit the plan's aspect ratio inside the available space
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
     const fit = () => {
-      const { width, height } = el.getBoundingClientRect();
-      const w = Math.min(width, height * aspect);
-      setStage({ w, h: w / aspect });
+      const { width: W, height: H } = el.getBoundingClientRect();
+      const pad = 40;
+      const w = Math.max(0, Math.min(W - pad, (H - pad) * aspect));
+      setGeo({ W, H, w, h: w / aspect });
     };
     fit();
     const ro = new ResizeObserver(fit);
@@ -86,21 +109,123 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
     return () => ro.disconnect();
   }, [aspect]);
 
-  const posOf = (uuid: string) => (drag?.uuid === uuid ? drag : fp?.pins[uuid]);
+  // ---- camera
+  /** keep at least a quarter of the plan on screen */
+  const clampView = (v: View): View => {
+    const { W, H, w, h } = geoRef.current;
+    const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.k));
+    const ox = (W - w) / 2, oy = (H - h) / 2;
+    const cx = (lo: number, hi: number, x: number) => Math.min(hi, Math.max(lo, x));
+    return {
+      k,
+      x: cx(W * 0.25 - ox - w * k, W * 0.75 - ox, v.x),
+      y: cx(H * 0.25 - oy - h * k, H * 0.75 - oy, v.y),
+    };
+  };
+  /** zoom to `k` keeping the point (px, py) in the viewport still */
+  const zoomAt = (v: View, k: number, px: number, py: number): View => {
+    const { W, H, w, h } = geoRef.current;
+    const ox = (W - w) / 2, oy = (H - h) / 2;
+    const k2 = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
+    const sx = (px - ox - v.x) / v.k, sy = (py - oy - v.y) / v.k;
+    return clampView({ k: k2, x: px - ox - sx * k2, y: py - oy - sy * k2 });
+  };
+  const glide = (next: (v: View) => View) => {
+    setGliding(true);
+    setView((v) => next(v));
+    window.setTimeout(() => setGliding(false), 320);
+  };
+  const zoomBy = (f: number) => glide((v) => zoomAt(v, v.k * f, geoRef.current.W / 2, geoRef.current.H / 2));
+  const fitPlan = () => glide(() => FIT);
 
-  // ---- dragging pins
+  // trackpad: pinch zooms (ctrlKey), two fingers pan; mouse: ⌘ + wheel zooms
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest(".speaker-card")) return;
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const px = e.clientX - r.left, py = e.clientY - r.top;
+      if (e.ctrlKey || e.metaKey) {
+        const f = Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.003));
+        setView((v) => zoomAt(v, v.k * f, px, py));
+      } else {
+        setView((v) => clampView({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // keys: + / − / 0, and Esc leaves placing
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement || e.metaKey || e.ctrlKey) return;
+      if (e.key === "+" || e.key === "=") zoomBy(1.5);
+      else if (e.key === "-") zoomBy(1 / 1.5);
+      else if (e.key === "0") fitPlan();
+      else if (e.key === "Escape") setPlacing(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // drag the background (or a speaker, when not organizing) to pan; a click without moving selects
+  const pan = useRef<{ px: number; py: number; x: number; y: number; moved: boolean; pin: string | null } | null>(null);
+  const onWrapDown = (e: React.PointerEvent) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest(".speaker-card, .plan-ui, .plan-empty button")) return;
+    const pin = (e.target as HTMLElement).closest<HTMLElement>("[data-uuid]")?.dataset.uuid ?? null;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    pan.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y, moved: false, pin };
+  };
+  const onWrapMove = (e: React.PointerEvent) => {
+    const p = pan.current;
+    if (!p) return;
+    const dx = e.clientX - p.px, dy = e.clientY - p.py;
+    if (!p.moved && Math.hypot(dx, dy) < 4) return;
+    if (!p.moved) setPanning(true);
+    p.moved = true;
+    setView((v) => clampView({ ...v, x: p.x + dx, y: p.y + dy }));
+  };
+  const onWrapUp = (e: React.PointerEvent) => {
+    const p = pan.current;
+    pan.current = null;
+    setPanning(false);
+    if (!p || p.moved) return;
+    if (placing && stageRef.current) return placeAt(placing, e.clientX, e.clientY, stageRef.current);
+    setSelected((cur) => (p.pin ? (cur === p.pin ? null : p.pin) : null));
+  };
+  const onWrapDouble = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest(".speaker-card, .plan-ui, [data-uuid]")) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    glide((v) => (v.k >= MAX_ZOOM - 0.01 ? FIT : zoomAt(v, v.k * 2, px, py)));
+  };
+
+  const posOf = (uuid: string) => (drag?.uuid === uuid ? drag : fp?.pins[uuid]);
+  const k = view.k;
+  const tx = (geo.W - geo.w) / 2 + view.x;
+  const ty = (geo.H - geo.h) / 2 + view.y;
+  /** plan fraction → position in the (unscaled) speaker layer */
+  const at = (p: { x: number; y: number }) => ({ left: p.x * geo.w * k, top: p.y * geo.h * k });
+
+  // ---- moving speakers (organize mode)
   const nearest = (uuid: string, x: number, y: number) => {
     let best: { uuid: string; d: number } | null = null;
     for (const s of placed) {
       if (s.uuid === uuid) continue;
       const p = fp!.pins[s.uuid];
-      const d = Math.hypot((p.x - x) * stage.w, (p.y - y) * stage.h);
+      const d = Math.hypot((p.x - x) * geo.w * k, (p.y - y) * geo.h * k);
       if (d < SNAP && (!best || d < best.d)) best = { uuid: s.uuid, d };
     }
     return best?.uuid ?? null;
   };
 
   const onPinDown = (e: React.PointerEvent, s: Speaker) => {
+    if (!organize) return; // let it bubble: the plan pans
+    e.stopPropagation();
     const p = fp?.pins[s.uuid];
     if (!p) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -114,7 +239,7 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
     const dx = e.clientX - st.px, dy = e.clientY - st.py;
     if (!st.moved && Math.hypot(dx, dy) < 4) return;
     st.moved = true;
-    const x = clamp(st.x + dx / stage.w), y = clamp(st.y + dy / stage.h);
+    const x = clamp(st.x + dx / (geo.w * k)), y = clamp(st.y + dy / (geo.h * k));
     setDrag({ uuid: s.uuid, x, y, target: nearest(s.uuid, x, y) });
   };
 
@@ -156,33 +281,20 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
     }
   };
 
-  // ---- dropping unplaced speakers from the side list
+  // ---- adding speakers from the side list
   const placeAt = (uuid: string, clientX: number, clientY: number, stageEl: HTMLElement) => {
-    const r = stageEl.getBoundingClientRect();
+    const r = stageEl.getBoundingClientRect(); // already zoomed and panned
     const base = fp ?? { pins: {} };
     save({ ...base, pins: { ...base.pins, [uuid]: { x: clamp((clientX - r.left) / r.width), y: clamp((clientY - r.top) / r.height) } } });
     setSelected(uuid);
     setPlacing(null);
   };
 
-  const onStageDrop = (e: React.DragEvent) => {
+  const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const uuid = e.dataTransfer.getData("text/plain");
-    if (uuid && byId.has(uuid)) placeAt(uuid, e.clientX, e.clientY, e.currentTarget as HTMLElement);
+    if (uuid && byId.has(uuid) && stageRef.current) placeAt(uuid, e.clientX, e.clientY, stageRef.current);
   };
-
-  const stageRef = useRef<HTMLDivElement>(null);
-  const onStageClick = (e: React.MouseEvent) => {
-    if (placing && stageRef.current) return placeAt(placing, e.clientX, e.clientY, stageRef.current);
-    if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("plan-img")) setSelected(null);
-  };
-
-  useEffect(() => {
-    if (!placing) return;
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setPlacing(null);
-    window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
-  }, [placing]);
 
   // ---- floorplan upload (downscaled so the saved JSON stays small)
   const onFile = async (file?: File) => {
@@ -190,6 +302,7 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
     try {
       const image = await downscale(file, 2400);
       save({ pins: fp?.pins ?? {}, image });
+      fitPlan();
       toast("Floorplan saved");
     } catch (e) {
       toast(`Couldn't read that image: ${errText(e)}`, true);
@@ -201,33 +314,29 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
 
   return (
     <div className="overview">
-      <div className="plan-wrap" ref={wrapRef}>
+      <div
+        ref={wrapRef}
+        className={`plan-wrap ${gliding ? "gliding" : ""} ${panning ? "panning" : ""} ${organize ? "organizing" : ""} ${placing ? "placing" : ""}`}
+        onPointerDown={onWrapDown}
+        onPointerMove={onWrapMove}
+        onPointerUp={onWrapUp}
+        onPointerCancel={() => ((pan.current = null), setPanning(false))}
+        onDoubleClick={onWrapDouble}
+        onDragOver={(e) => (e.preventDefault(), (e.dataTransfer.dropEffect = "move"))}
+        onDrop={onDrop}
+      >
+        {/* the plan itself zooms… */}
         <div
           ref={stageRef}
-          className={`plan-stage ${fp?.image ? "" : "blank"} ${placing ? "placing" : ""}`}
-          style={{ width: stage.w, height: stage.h }}
-          onDragOver={(e) => (e.preventDefault(), (e.dataTransfer.dropEffect = "move"))}
-          onDrop={onStageDrop}
-          onClick={onStageClick}
+          className={`plan-stage ${fp?.image ? "" : "blank"}`}
+          style={{ width: geo.w, height: geo.h, transform: `translate(${tx}px, ${ty}px) scale(${k})` }}
         >
           {fp?.image && (
             <img className="plan-img" src={fp.image} alt="Floorplan" draggable={false}
               onLoad={(e) => setAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)} />
           )}
-          {placing && (
-            <div className="placing-hint">Click where <b>{byId.get(placing)?.name}</b> stands · Esc to cancel</div>
-          )}
-          {!fp?.image && (
-            <div className="plan-empty">
-              <Icon.Map width={40} height={40} />
-              <p>Upload a floorplan, then drag your speakers onto it.</p>
-              <button className="btn primary" onClick={() => fileRef.current?.click()}>Upload floorplan</button>
-              <p className="muted small">You can also place speakers on this blank grid.</p>
-            </div>
-          )}
-
           {/* group links: members connect to their coordinator; they flow while playing */}
-          <svg className="plan-links" width={stage.w} height={stage.h}>
+          <svg className="plan-links" width={geo.w} height={geo.h}>
             {data.map((o) => {
               const c = posOf(o.group.coordinatorUuid);
               if (!c || o.group.members.length < 2) return null;
@@ -240,24 +349,36 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
                   if (!p) return null;
                   return (
                     <line key={m.uuid} className={`plan-link ${playing ? "flow" : ""} ${hoverGroup && hoverGroup !== o.group.id ? "faded" : ""}`}
-                      x1={c.x * stage.w} y1={c.y * stage.h} x2={p.x * stage.w} y2={p.y * stage.h} stroke={color} />
+                      x1={c.x * geo.w} y1={c.y * geo.h} x2={p.x * geo.w} y2={p.y * geo.h} stroke={color} />
                   );
                 });
             })}
           </svg>
+        </div>
 
+        {!fp?.image && (
+          <div className="plan-empty">
+            <Icon.Map width={40} height={40} />
+            <p>Upload a floorplan, then drag your speakers onto it.</p>
+            <button className="btn primary" onClick={() => fileRef.current?.click()}>Upload floorplan</button>
+            <p className="muted small">You can also place speakers on this blank grid.</p>
+          </div>
+        )}
+
+        {/* …the speakers only move with it, so they stay the same size */}
+        <div className="plan-pins" style={{ transform: `translate(${tx}px, ${ty}px)` }}>
           {placed.map((s) => {
             const p = posOf(s.uuid)!;
             const playing = s.state?.transport === "PLAYING";
             const dim = hoverGroup && hoverGroup !== s.group.id;
             return (
-              <div key={s.uuid}
-                className={`pin ${playing ? "playing" : ""} ${selected === s.uuid ? "selected" : ""} ${drag?.uuid === s.uuid ? "dragging" : ""} ${drag?.target === s.uuid ? "drop-target" : ""} ${dim ? "faded" : ""}`}
-                style={{ left: p.x * stage.w, top: p.y * stage.h, "--c": s.color, "--v": s.volume } as React.CSSProperties}
+              <div key={s.uuid} data-uuid={s.uuid}
+                className={`pin ${organize ? "editable" : ""} ${playing ? "playing" : ""} ${selected === s.uuid ? "selected" : ""} ${drag?.uuid === s.uuid ? "dragging" : ""} ${drag?.target === s.uuid ? "drop-target" : ""} ${dim ? "faded" : ""}`}
+                style={{ ...at(p), "--c": s.color, "--v": s.volume } as React.CSSProperties}
                 onPointerDown={(e) => onPinDown(e, s)}
                 onPointerMove={(e) => onPinMove(e, s)}
-                onPointerUp={() => onPinUp(s)}
-                title={`${s.name} — volume ${s.volume}`}>
+                onPointerUp={(e) => organize && (e.stopPropagation(), onPinUp(s))}
+                title={`${s.name} · volume ${s.volume}`}>
                 <div className="pin-ring">
                   <div className="pin-disc">
                     {s.state?.track?.art ? <Art src={s.state.track.art} /> : <Icon.Speaker />}
@@ -277,8 +398,8 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
               s={sel}
               groups={data.map((o) => o.group)}
               style={{
-                left: Math.min(selPos.x * stage.w + 36, stage.w - 290),
-                top: Math.max(8, Math.min(selPos.y * stage.h - 40, stage.h - 330)),
+                left: Math.max(8 - tx, Math.min(at(selPos).left + 36, geo.W - tx - 290)),
+                top: Math.max(8 - ty, Math.min(at(selPos).top - 40, geo.H - ty - 330)),
               }}
               run={run}
               onJoin={(g) => groupInto(sel, g)}
@@ -294,13 +415,28 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
             />
           )}
         </div>
+
+        {/* controls float above the plan */}
+        <div className="plan-ui plan-toolbar">
+          <button className={`organize-btn ${organize ? "on" : ""}`} onClick={() => (setOrganize((o) => !o), setPlacing(null), setDrag(null))}>
+            {organize ? <><Icon.Check width={15} height={15} /> Done</> : <><Icon.Move width={15} height={15} /> Organize speakers</>}
+          </button>
+          {organize && (
+            <span className="organize-hint">
+              {placing ? <>Click where <b>{byId.get(placing)?.name}</b> stands · Esc to cancel</> : "Drag speakers to move them. Drop one on another to group them."}
+            </span>
+          )}
+        </div>
+        <div className="plan-ui plan-zoom">
+          <button className="icon-btn sm" onClick={() => zoomBy(1 / 1.5)} disabled={k <= MIN_ZOOM} title="Zoom out (−)"><Icon.ZoomOut /></button>
+          <button className="zoom-level" onClick={fitPlan} title="Fit to window (0)">{Math.round(k * 100)}%</button>
+          <button className="icon-btn sm" onClick={() => zoomBy(1.5)} disabled={k >= MAX_ZOOM} title="Zoom in (+)"><Icon.ZoomIn /></button>
+        </div>
       </div>
 
       <aside className="overview-side">
         <div className="panel-head">
           <h2>Groups</h2>
-          <button className="link" onClick={() => fileRef.current?.click()}>{fp?.image ? "Replace plan" : "Upload plan"}</button>
-          {fp?.image && <button className="link" onClick={() => confirm("Remove the floorplan image? Speaker positions are kept.") && save({ ...fp, image: undefined })}>Remove</button>}
         </div>
         <div className="group-cards">
           {data.map((o, gi) => (
@@ -309,26 +445,41 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
           ))}
           {!data.length && <p className="muted pad">Looking for speakers…</p>}
         </div>
-        {unplaced.length > 0 && (
-          <>
-            <div className="panel-head"><h2>Not on the plan</h2></div>
-            <p className="muted small pad-x">Drag onto the plan, or click one and then click its spot.</p>
-            <div className="unplaced">
-              {unplaced.map((s) => (
-                <button key={s.uuid} className={`chip-speaker ${placing === s.uuid ? "active" : ""}`} draggable
-                  style={{ "--c": s.color } as React.CSSProperties}
-                  onClick={() => setPlacing((p) => (p === s.uuid ? null : s.uuid))}
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData("text/plain", s.uuid);
-                    e.dataTransfer.effectAllowed = "move";
-                  }}>
-                  <Icon.Speaker width={14} height={14} /> {s.name}
+        {organize && (
+          <div className="organize-side">
+            {unplaced.length > 0 && (
+              <>
+                <div className="panel-head"><h2>Not on the plan</h2></div>
+                <p className="muted small pad-x">Drag onto the plan, or click one and then click its spot.</p>
+                <div className="unplaced">
+                  {unplaced.map((s) => (
+                    <button key={s.uuid} className={`chip-speaker ${placing === s.uuid ? "active" : ""}`} draggable
+                      style={{ "--c": s.color } as React.CSSProperties}
+                      onClick={() => setPlacing((p) => (p === s.uuid ? null : s.uuid))}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", s.uuid);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}>
+                      <Icon.Speaker width={14} height={14} /> {s.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="panel-head"><h2>Floorplan image</h2></div>
+            <div className="plan-file pad-x">
+              <button className="btn small" onClick={() => fileRef.current?.click()}>{fp?.image ? "Replace" : "Upload"}</button>
+              {fp?.image && (
+                <button className="btn small" onClick={() => confirm("Remove the floorplan image? Speaker positions are kept.") && save({ ...fp, image: undefined })}>
+                  Remove
                 </button>
-              ))}
+              )}
             </div>
-          </>
+          </div>
         )}
-        <p className="muted small pad">Tip: drop a speaker onto another one to group them.</p>
+        <p className="muted small pad">
+          {organize ? "Tip: drop a speaker onto another one to group them." : "Pinch or ⌘-scroll to zoom, drag to move around. Click a speaker for its controls."}
+        </p>
       </aside>
 
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => (onFile(e.target.files?.[0]), (e.target.value = ""))} />

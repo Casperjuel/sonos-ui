@@ -283,9 +283,16 @@ section { margin-top: 18px; }
 /* ------------------------------------------------------------- floorplan overview */
 .overview-body { grid-template-columns: 1fr; }
 .overview { display: grid; grid-template-columns: 1fr 320px; min-height: 0; height: 100%; }
-.plan-wrap { position: relative; display: grid; place-items: center; padding: 20px; min-height: 0; min-width: 0; overflow: hidden; }
+.plan-wrap { position: relative; min-height: 0; min-width: 0; overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
+.plan-wrap.panning { cursor: grabbing; }
+.plan-wrap.placing { cursor: crosshair; }
+/* camera: the plan scales, the speakers only translate (so they keep their size) */
+.plan-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.plan-pins { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; }
+.plan-wrap.gliding :is(.plan-stage, .plan-pins) { transition: transform .32s cubic-bezier(.2, .8, .2, 1); }
+.plan-wrap.gliding .pin { transition: left .32s cubic-bezier(.2, .8, .2, 1), top .32s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
 .plan-stage {
-  position: relative; border-radius: 14px; background: #181818;
+  border-radius: 14px; background: #181818;
   box-shadow: 0 10px 40px #0007, inset 0 0 0 1px var(--line);
 }
 .plan-stage.blank {
@@ -297,14 +304,14 @@ section { margin-top: 18px; }
 .plan-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--dim); text-align: center; pointer-events: none; }
 .plan-empty button { pointer-events: auto; }
 .plan-links { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-.plan-link { stroke-width: 3; stroke-linecap: round; opacity: .55; stroke-dasharray: 2 9; transition: opacity .3s; }
+.plan-link { vector-effect: non-scaling-stroke; stroke-width: 3; stroke-linecap: round; opacity: .55; stroke-dasharray: 2 9; transition: opacity .3s; }
 .plan-link.flow { opacity: .9; animation: flow 1s linear infinite; }
 .plan-link.faded { opacity: .1; }
 @keyframes flow { to { stroke-dashoffset: -11; } }
 
 .pin {
   position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px;
-  cursor: grab; touch-action: none; user-select: none; z-index: 2;
+  cursor: pointer; touch-action: none; user-select: none; z-index: 2;
   transition: opacity .3s, transform .35s cubic-bezier(.34, 1.56, .64, 1);
 }
 .pin.dragging { cursor: grabbing; z-index: 5; transform: translate(-50%, -50%) scale(1.12); transition: none; }
@@ -362,11 +369,36 @@ section { margin-top: 18px; }
 }
 .chip-speaker:active { cursor: grabbing; }
 .chip-speaker.active { background: var(--c); color: #fff; box-shadow: 0 0 14px var(--c); }
-.plan-stage.placing { cursor: crosshair; }
-.placing-hint {
-  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; pointer-events: none;
-  padding: 7px 14px; border-radius: 999px; font-size: 12px; background: rgba(0, 0, 0, .75); color: #fff; white-space: nowrap;
+/* organize mode: speakers lift and get a dashed edge, so it's clear they can move */
+.pin.editable { cursor: grab; transform: translate(-50%, calc(-50% - 3px)); }
+.pin.editable .pin-ring { outline: 2px dashed color-mix(in srgb, var(--c) 85%, #fff); outline-offset: 4px; box-shadow: 0 12px 26px #000a; }
+.pin.editable.dragging { transform: translate(-50%, calc(-50% - 3px)) scale(1.12); }
+.plan-wrap.organizing .plan-stage { box-shadow: 0 10px 40px #0007, 0 0 0 2px color-mix(in srgb, var(--green) 70%, transparent); }
+
+.plan-ui { position: absolute; z-index: 8; cursor: default; }
+.plan-toolbar { top: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100% - 28px); }
+.organize-btn {
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap;
+  background: rgba(20, 20, 20, .78); color: #fff; border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 6px 20px #0008;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: background .2s, color .2s, transform .2s;
 }
+.organize-btn:hover { transform: translateY(-1px); }
+.organize-btn.on { background: var(--green); color: #000; border-color: transparent; }
+.organize-hint {
+  padding: 7px 12px; border-radius: 999px; font-size: 12px; color: #fff; background: rgba(0, 0, 0, .6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); animation: rise .2s ease-out;
+}
+.plan-zoom {
+  right: 14px; bottom: 14px; display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px;
+  background: rgba(20, 20, 20, .78); border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 6px 20px #0008;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+}
+.plan-zoom .icon-btn { color: #fff; }
+.plan-zoom .icon-btn:disabled { opacity: .35; }
+.zoom-level { min-width: 48px; font-size: 12px; font-variant-numeric: tabular-nums; color: #fff; padding: 4px; border-radius: 999px; }
+.zoom-level:hover { background: rgba(255, 255, 255, .12); }
+.organize-side { animation: rise .2s ease-out; }
+.plan-file { display: flex; gap: 8px; padding-bottom: 8px; }
 
 /* glass flavour */
 [data-theme="glass"] .overview-side { border-radius: 24px; border: 1px solid var(--edge); margin-left: 12px;
