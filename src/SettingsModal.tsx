@@ -116,6 +116,14 @@ export function SettingsModal({ groupId, household, me, onLogin, onLogout, onClo
               <input value={sysName} placeholder="e.g. Office or Home" onChange={(e) => setSysName(e.target.value)} />
             </label>
           )}
+          <div className="share-row">
+            <span>
+              Share floorplan, system name and Spotify link with others on this network
+              <small className="muted">Stored encrypted. Only devices that can reach these speakers can read it.</small>
+            </span>
+            <button type="button" className={`toggle ${!s.localOnly ? "on" : ""}`} aria-pressed={!s.localOnly}
+              onClick={() => set("localOnly", !s.localOnly)} />
+          </div>
           <label>
             Speaker IPs (optional, comma separated). Use these if discovery is blocked.
             <input value={s.seedIps.join(", ")} placeholder="192.168.1.20"

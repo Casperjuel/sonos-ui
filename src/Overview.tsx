@@ -18,6 +18,8 @@ type Speaker = Member & {
 };
 
 type Props = {
+  /** bumps when someone else on this system changed the floorplan */
+  syncTick: number;
   run: Run;
   toast: ToastFn;
   /** rediscover topology after grouping changes */
@@ -25,7 +27,7 @@ type Props = {
   onOpenRoom: (groupId: string) => void;
 };
 
-export function Overview({ run, toast, onRegrouped, onOpenRoom }: Props) {
+export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Props) {
   const [data, setData] = useState<GroupOverview[]>([]);
   const [fp, setFp] = useState<Floorplan | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export function Overview({ run, toast, onRegrouped, onOpenRoom }: Props) {
   }, [refresh]);
   useEffect(() => {
     api.getFloorplan().then(setFp);
-  }, []);
+  }, [syncTick]);
 
   const save = (next: Floorplan) => {
     setFp(next);

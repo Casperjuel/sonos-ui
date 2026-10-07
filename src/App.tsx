@@ -92,6 +92,20 @@ export default function App() {
     return () => (clearInterval(t), window.removeEventListener("focus", onFocus));
   }, [discover]);
 
+  // floorplan, system name and Spotify link shared by everyone on this system
+  const [syncTick, setSyncTick] = useState(0);
+  useEffect(() => {
+    if (!household) return;
+    const pull = () =>
+      api.syncPull().then((changed) => {
+        if (changed) (setSyncTick((t) => t + 1), discover());
+      }).catch(() => {});
+    pull();
+    const t = setInterval(pull, 30000);
+    window.addEventListener("focus", pull);
+    return () => (clearInterval(t), window.removeEventListener("focus", pull));
+  }, [household, discover]);
+
   useEffect(() => {
     if (groupId && household) localStorage.setItem(`group:${household}`, groupId);
   }, [groupId, household]);
@@ -336,7 +350,7 @@ export default function App() {
       {view === "overview" ? (
         <div className="body overview-body">
           {/* keyed per system so each loads its own floorplan */}
-          <Overview key={household ?? "none"} run={run} toast={toast} onRegrouped={discover}
+          <Overview key={household ?? "none"} syncTick={syncTick} run={run} toast={toast} onRegrouped={discover}
             onOpenRoom={(id) => (setGroupId(id), setView("player"))} />
         </div>
       ) : (

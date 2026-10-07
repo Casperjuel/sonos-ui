@@ -1,12 +1,13 @@
 mod sonos;
 mod spotify;
+mod sync;
 mod tray;
 
 use serde::{Deserialize, Serialize};
 use sonos::{Group, Item, PlayerState, Res, SpotifyLink, Svc};
 use spotify::{Creds, Me, PlayerQueue, SearchResult, SpItem, Spotify};
 use std::{collections::HashMap, path::PathBuf, time::Duration};
-use tauri::{Manager, State};
+use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 
 /// Shared Spotify app, baked in at build time (`SPOTIFY_CLIENT_ID`). Logging in
@@ -38,6 +39,8 @@ struct Settings {
     household_names: HashMap<String, String>,
     /// the system picked by hand when several are visible at once
     preferred_household: Option<String>,
+    /// don't share floorplan/name/Spotify link with others on the network
+    local_only: bool,
 }
 
 struct App {
@@ -51,6 +54,12 @@ struct App {
     household: Mutex<Option<String>>,
     /// detected Spotify link per household
     links: Mutex<HashMap<String, SpotifyLink>>,
+    /// last synced version per household
+    sync_etags: Mutex<HashMap<String, String>>,
+    /// bumped on every local edit, so a pull that raced an edit doesn't overwrite it
+    local_rev: std::sync::atomic::AtomicU64,
+    /// one push or pull at a time
+    sync_lock: Mutex<()>,
 }
 
 impl App {
@@ -88,7 +97,7 @@ fn write_settings(app: &App, s: &Settings) -> Res<()> {
 }
 
 #[tauri::command]
-async fn save_settings(app: State<'_, App>, mut settings: Settings) -> Res<()> {
+async fn save_settings(app: State<'_, App>, handle: AppHandle, mut settings: Settings) -> Res<()> {
     let hh = app.household().await;
     {
         // the dialog doesn't round-trip per-system maps, so carry them over
@@ -105,6 +114,7 @@ async fn save_settings(app: State<'_, App>, mut settings: Settings) -> Res<()> {
     *app.settings.lock().await = settings;
     app.spotify.reset_app_token().await;
     app.links.lock().await.remove(&hh);
+    share(&app, handle, hh);
     Ok(())
 }
 
@@ -210,15 +220,17 @@ async fn set_household(app: State<'_, App>, id: String) -> Res<Discovery> {
 }
 
 #[tauri::command]
-async fn rename_household(app: State<'_, App>, id: String, name: String) -> Res<()> {
+async fn rename_household(app: State<'_, App>, handle: AppHandle, id: String, name: String) -> Res<()> {
     let mut s = app.settings.lock().await;
     let name = name.trim().to_string();
     if name.is_empty() {
         s.household_names.remove(&id);
     } else {
-        s.household_names.insert(id, name);
+        s.household_names.insert(id.clone(), name);
     }
-    write_settings(&app, &s)
+    write_settings(&app, &s)?;
+    share(&app, handle, id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -557,7 +569,11 @@ async fn leave_group(app: State<'_, App>, member_ip: String) -> Res<()> {
 
 /// One floorplan per Sonos system: floorplan-<household>.json
 async fn floorplan_path(app: &App) -> PathBuf {
-    let hh: String = app.household().await.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+    floorplan_file(app, &app.household().await)
+}
+
+fn floorplan_file(app: &App, household: &str) -> PathBuf {
+    let hh: String = household.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
     app.settings_path.with_file_name(format!("floorplan-{hh}.json"))
 }
 
@@ -581,8 +597,101 @@ async fn get_floorplan(app: State<'_, App>) -> Res<Option<String>> {
 }
 
 #[tauri::command]
-async fn save_floorplan(app: State<'_, App>, json: String) -> Res<()> {
-    std::fs::write(floorplan_path(&app).await, json).map_err(|e| e.to_string())
+async fn save_floorplan(app: State<'_, App>, handle: AppHandle, json: String) -> Res<()> {
+    std::fs::write(floorplan_path(&app).await, json).map_err(|e| e.to_string())?;
+    share(&app, handle, app.household().await);
+    Ok(())
+}
+
+// ------------------------------------------------------------------ sharing
+
+/// What this machine knows about a system, as shared with the others.
+async fn snapshot(app: &App, household: &str) -> sync::Shared {
+    let s = app.settings.lock().await;
+    sync::Shared {
+        floorplan: std::fs::read_to_string(floorplan_file(app, household)).ok(),
+        name: s.household_names.get(household).cloned(),
+        spotify: s.spotify_overrides.get(household).copied(),
+    }
+}
+
+/// Upload in the background after a local edit.
+fn share(app: &App, handle: AppHandle, household: String) {
+    use std::sync::atomic::Ordering;
+    app.local_rev.fetch_add(1, Ordering::SeqCst);
+    if household.is_empty() {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        let app = handle.state::<App>();
+        if app.settings.lock().await.local_only {
+            return;
+        }
+        let _guard = app.sync_lock.lock().await;
+        let shared = snapshot(&app, &household).await;
+        match sync::push(&app.http, &household, &shared).await {
+            Ok(etag) => drop(app.sync_etags.lock().await.insert(household, etag)),
+            Err(e) => eprintln!("sync push: {e}"),
+        }
+    });
+}
+
+/// Fetch what others shared for the active system. True when something changed
+/// (the frontend then reloads the floorplan and system names).
+#[tauri::command]
+async fn sync_pull(app: State<'_, App>) -> Res<bool> {
+    use std::sync::atomic::Ordering;
+    let hh = app.household().await;
+    if hh.is_empty() || app.settings.lock().await.local_only {
+        return Ok(false);
+    }
+    let _guard = app.sync_lock.lock().await;
+    let rev = app.local_rev.load(Ordering::SeqCst);
+    let etag = app.sync_etags.lock().await.get(&hh).cloned();
+    let pulled = match sync::pull(&app.http, &hh, etag.as_deref()).await {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("sync pull: {e}"); // offline is fine, keep the local copy
+            return Ok(false);
+        }
+    };
+    match pulled {
+        sync::Pulled::Unchanged => Ok(false),
+        sync::Pulled::Missing => {
+            // first one here: share what we have
+            let shared = snapshot(&app, &hh).await;
+            if !shared.is_empty() {
+                if let Ok(etag) = sync::push(&app.http, &hh, &shared).await {
+                    app.sync_etags.lock().await.insert(hh, etag);
+                }
+            }
+            Ok(false)
+        }
+        sync::Pulled::Doc { etag, shared } => {
+            if app.local_rev.load(Ordering::SeqCst) != rev {
+                return Ok(false); // edited meanwhile; that edit's push wins
+            }
+            let changed = shared != snapshot(&app, &hh).await;
+            if changed {
+                if let Some(fp) = &shared.floorplan {
+                    std::fs::write(floorplan_file(&app, &hh), fp).map_err(|e| e.to_string())?;
+                }
+                let mut s = app.settings.lock().await;
+                match shared.name {
+                    Some(n) => drop(s.household_names.insert(hh.clone(), n)),
+                    None => drop(s.household_names.remove(&hh)),
+                }
+                match shared.spotify {
+                    Some(o) => drop(s.spotify_overrides.insert(hh.clone(), o)),
+                    None => drop(s.spotify_overrides.remove(&hh)),
+                }
+                write_settings(&app, &s)?;
+                app.links.lock().await.remove(&hh);
+            }
+            app.sync_etags.lock().await.insert(hh, etag);
+            Ok(changed)
+        }
+    }
 }
 
 // ------------------------------------------------------------------ boot
@@ -617,6 +726,9 @@ pub fn run() {
                 groups: Default::default(),
                 household: Default::default(),
                 links: Default::default(),
+                sync_etags: Default::default(),
+                local_rev: Default::default(),
+                sync_lock: Default::default(),
             });
             tray::setup(app.handle())?;
             Ok(())
@@ -662,6 +774,7 @@ pub fn run() {
             leave_group,
             get_floorplan,
             save_floorplan,
+            sync_pull,
             set_household,
             rename_household,
         ])

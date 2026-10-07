@@ -44,6 +44,8 @@ export type Settings = {
   spotifyClientSecret: string;
   market: string;
   seedIps: string[];
+  /** don't share the floorplan etc. with others on the network */
+  localOnly?: boolean;
   spotifySid?: number | null;
   spotifySn?: number | null;
 };
@@ -98,6 +100,8 @@ export const api = {
     }
   },
   saveFloorplan: (fp: Floorplan) => invoke<void>("save_floorplan", { json: JSON.stringify(fp) }),
+  /** fetch what others shared for this system; true when something changed */
+  syncPull: () => invoke<boolean>("sync_pull"),
   /** the logged-in user's Spotify Connect queue */
   addToSpotifyQueue: (id: string) => invoke<void>("spotify_add_to_player_queue", { id }),
 };
