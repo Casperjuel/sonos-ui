@@ -1,0 +1,86 @@
+name: Release
+
+# release-please keeps a "release vX.Y.Z" PR up to date from conventional
+# commits (feat:, fix:). Merging it tags the release, and the job below builds
+# the universal macOS app and attaches it, including a fixed-name
+# Sonos-UI.dmg so this link always serves the newest build:
+# https://github.com/<owner>/<repo>/releases/latest/download/Sonos-UI.dmg
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      created: ${{ steps.rp.outputs.release_created }}
+      tag: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: rp
+
+  macos:
+    needs: release-please
+    if: needs.release-please.outputs.created == 'true'
+    runs-on: macos-latest
+    env:
+      TAG: ${{ needs.release-please.outputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+
+      # With the Apple secrets set, the app is signed with a Developer ID and
+      # notarized. Without them it falls back to an ad-hoc signature
+      # (bundle.macOS.signingIdentity "-"), which runs after "Open Anyway".
+      - name: Apple signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              { echo "$v<<__EOF__"; printenv "$v"; echo "__EOF__"; } >> "$GITHUB_ENV"
+            done
+            echo "Signing with Developer ID and notarizing"
+          else
+            echo "::warning::No Apple certificate configured, building with an ad-hoc signature"
+          fi
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          # optional repo variable; the source has a built-in default
+          SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID }}
+        with:
+          args: --target universal-apple-darwin
+          tagName: ${{ env.TAG }}
+
+      - name: Attach Sonos-UI.dmg
+        run: |
+          cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg Sonos-UI.dmg
+          gh release upload "$TAG" Sonos-UI.dmg --clobber
+          gh release edit "$TAG" --notes "$(gh release view "$TAG" --json body -q .body)
+
+          ---
+          **Install:** download **Sonos-UI.dmg**, open it and drag Sonos UI to Applications.
+          If macOS says it can't be opened: System Settings → Privacy & Security → **Open Anyway**."
