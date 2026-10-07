@@ -17,8 +17,8 @@ use std::{collections::HashMap, time::Duration};
 
 /// base of the sync service
 const SYNC_URL: &str = match option_env!("SPONOS_SYNC_URL") {
-    Some(url) => url,
-    None => "https://sponos-sync.vercel.app/api",
+    Some(url) if !url.is_empty() => url,
+    _ => "https://sponos-sync.vercel.app/api",
 };
 
 // ------------------------------------------------------------------ crypto

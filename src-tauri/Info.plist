@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- macOS asks for local network access before the app can reach the speakers -->
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Sponos finds and controls the Sonos speakers on your network.</string>
+</dict>
+</plist>

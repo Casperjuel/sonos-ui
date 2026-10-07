@@ -13,9 +13,10 @@ use tokio::sync::Mutex;
 /// Shared Spotify app, baked in at build time (`SPOTIFY_CLIENT_ID`). Logging in
 /// uses PKCE, which needs only this public ID, never a secret. Dev-mode apps
 /// allow 5 users, each added under User Management in the Spotify dashboard.
+/// (CI passes an empty string when the repo variable isn't set, so treat that as unset.)
 const DEFAULT_CLIENT_ID: &str = match option_env!("SPOTIFY_CLIENT_ID") {
-    Some(id) => id,
-    None => "f8140c478dbe48838c5d51272939d2ea",
+    Some(id) if !id.is_empty() => id,
+    _ => "f8140c478dbe48838c5d51272939d2ea",
 };
 
 #[derive(Serialize, Deserialize, Clone, Default)]
