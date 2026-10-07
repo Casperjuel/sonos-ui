@@ -435,3 +435,7 @@ section { margin-top: 18px; }
 .added-by.initial { background: var(--green); color: #000; font-size: 9px; font-weight: 700; text-align: center; line-height: 14px; }
 .added-by-line { margin-top: 10px; font-size: 12px; color: var(--dim); display: flex; align-items: center; justify-content: center; }
 .added-by-line .added-by { width: 18px; height: 18px; line-height: 18px; margin-right: 7px; vertical-align: 0; }
+
+.lib-row { position: relative; }
+.lib-row .forget { position: absolute; right: 8px; top: 50%; translate: 0 -50%; opacity: 0; }
+.lib-row:hover .forget { opacity: 1; }

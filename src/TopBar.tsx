@@ -113,7 +113,7 @@ export function TopBar({ group, state, fetchedAt, run, query, onQuery, onSetting
       <div className="tb-right" data-tauri-drag-region>
         <label className="search">
           <Icon.Search />
-          <input id="search" placeholder="Search Spotify  ⌘F" value={query} onChange={(e) => onQuery(e.target.value)}
+          <input id="search" placeholder="Search or paste a Spotify link  ⌘F" value={query} onChange={(e) => onQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && onQuery("")} spellCheck={false} />
           {query && <button className="icon-btn xs" onClick={() => onQuery("")}><Icon.X /></button>}
         </label>

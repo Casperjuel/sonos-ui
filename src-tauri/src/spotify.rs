@@ -175,10 +175,12 @@ impl Spotify {
             let _ = exp;
             return Ok(t.clone());
         }
-        if c.id.is_empty() || c.secret.is_empty() {
-            return Err("Log in to Spotify in Settings to search".into());
-        }
-        let v = Self::token_request(http, "grant_type=client_credentials".into(), Some(c)).await?;
+        // no secret in the app: the sync service makes catalogue tokens for us
+        let v = if c.secret.is_empty() {
+            crate::sync::spotify_token(http).await.map_err(|e| format!("Spotify search is unavailable right now ({e})"))?
+        } else {
+            Self::token_request(http, "grant_type=client_credentials".into(), Some(c)).await?
+        };
         Ok(Self::cache(&mut slot, &v))
     }
 
@@ -608,8 +610,60 @@ async fn embed_tracks(http: &reqwest::Client, kind: &str, id: &str) -> Res<Vec<S
     Ok(tracks)
 }
 
+/// A pasted Spotify link or URI (open.spotify.com/playlist/…, spotify:album:…)
+/// as something the app can open. Uses Spotify's public oEmbed for the name and
+/// cover, so it works without logging in.
+pub async fn resolve(http: &reqwest::Client, link: &str) -> Res<SpItem> {
+    let re = regex::Regex::new(r"(playlist|album|artist|track)[/:]([A-Za-z0-9]{22})").unwrap();
+    let c = re.captures(link).ok_or("That doesn't look like a Spotify link")?;
+    let (kind, id) = (c[1].to_string(), c[2].to_string());
+    let page = format!("https://open.spotify.com/{kind}/{id}");
+    let v: Value = http
+        .get(format!("https://open.spotify.com/oembed?url={}", urlencoding::encode(&page)))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|_| "Spotify couldn't find that (is it private?)")?;
+    let name = v["title"].as_str().filter(|t| !t.is_empty()).ok_or("Spotify couldn't find that (is it private?)")?;
+    let subtitle = match kind.as_str() {
+        "playlist" => "Playlist",
+        "album" => "Album",
+        "artist" => "Artist",
+        _ => "Song",
+    };
+    Ok(SpItem {
+        kind,
+        id,
+        name: name.to_string(),
+        subtitle: subtitle.into(),
+        image: v["thumbnail_url"].as_str().map(String::from),
+        duration_ms: None,
+    })
+}
+
 #[cfg(test)]
 mod live {
+    #[tokio::test]
+    #[ignore]
+    async fn resolve_a_pasted_link() {
+        let http = reqwest::Client::new();
+        let it = super::resolve(&http, "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=abc").await.unwrap();
+        assert_eq!((it.kind.as_str(), it.name.as_str()), ("playlist", "Today’s Top Hits"));
+        assert!(super::resolve(&http, "hello").await.is_err());
+    }
+
+    /// a colleague's setup: no secret, not logged in
+    #[tokio::test]
+    #[ignore]
+    async fn search_without_secret_or_login() {
+        let sp = super::Spotify::new(std::env::temp_dir().join("sponos-test-spotify.json"));
+        let c = super::Creds { id: "f8140c478dbe48838c5d51272939d2ea", secret: "" };
+        let r = sp.search(&reqwest::Client::new(), &c, "odesza", "DK").await.unwrap();
+        assert!(!r.tracks.is_empty() && !r.playlists.is_empty());
+    }
+
     /// network test: `cargo test --lib embed -- --ignored --nocapture`
     #[tokio::test]
     #[ignore]

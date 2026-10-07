@@ -21,7 +21,8 @@ If macOS says the app can't be opened, go to System Settings → Privacy & Secur
 
 **Requirements**
 - Sonos speakers on the same network, with Spotify linked to the Sonos system in the Sonos app. You don't need the Sonos app after that.
-- Log in with your own Spotify account in the app. The built-in Spotify app is in development mode, which allows 5 users. Each user's Spotify email must be added under User Management at <https://developer.spotify.com/dashboard>. Past 5 users, people can create their own Spotify app and paste its client ID under Settings → Advanced.
+- **No Spotify login needed** to search and queue: search runs through the sync service. To open your own playlists, paste a playlist link into the search box; it's saved to your library on that Mac.
+- Logging in (optional) shows your whole library and puts your avatar on songs you add. The built-in Spotify app is in development mode, which allows 5 users. Each user's Spotify email must be added under User Management at <https://developer.spotify.com/dashboard>. Past 5 users, people can create their own Spotify app and paste its client ID under Settings → Advanced.
 - Songs play through the Spotify account linked in Sonos. Your login is used for search, your playlists and your liked songs.
 
 ## Develop
@@ -35,7 +36,7 @@ pnpm tauri dev
 
 Releases use [release-please](https://github.com/googleapis/release-please). Write [conventional commits](https://www.conventionalcommits.org) (`feat: …`, `fix: …`) on `main`, and release-please keeps a "release vX.Y.Z" pull request up to date. Merging that PR tags the release. GitHub Actions then builds a universal (Apple Silicon + Intel) app and attaches it as `Sponos.dmg`. The download link above always points at the newest release.
 
-The Spotify client ID is compiled in. Set the repository variable `SPOTIFY_CLIENT_ID` to use a different one. No secret is needed, because login uses PKCE.
+The Spotify client ID is compiled in. Set the repository variable `SPOTIFY_CLIENT_ID` to use a different one. The app doesn't contain the client secret: login uses PKCE, and catalogue search uses tokens from the sync service (`sync/api/spotify-token.ts`), which has `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` set as Vercel environment variables.
 
 ### Auto-updates
 

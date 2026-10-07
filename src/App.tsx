@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, sameTitle, type Discovery, type Group, type Household, type Item, type Me, type PlayerQueue, type PlayerState, type Queued, type QueueMode, type SpItem } from "./api";
+import { api, isSpotifyLink, sameTitle, type Discovery, type Group, type Household, type Item, type Me, type PlayerQueue, type PlayerState, type Queued, type QueueMode, type SpItem } from "./api";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
@@ -34,6 +34,21 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const [playlists, setPlaylists] = useState<SpItem[]>([]);
+  // playlists opened from pasted links, kept on this Mac: the way in for people who can't log in
+  const [saved, setSaved] = useState<SpItem[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("saved") ?? "[]");
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("saved", JSON.stringify(saved));
+    } catch {
+      // private window etc.: it just won't be remembered
+    }
+  }, [saved]);
   const [spQueue, setSpQueue] = useState<PlayerQueue | null>(null);
   const fetchedAt = useRef(0);
 
@@ -365,7 +380,17 @@ export default function App() {
           fetchedAt={fetchedAt}
           run={run}
           query={query}
-          onQuery={(q) => (setQuery(q), setOpen(null), q && setView("player"))}
+          onQuery={(q) => {
+            if (q) setView("player");
+            if (!isSpotifyLink(q)) return (setQuery(q), setOpen(null));
+            setQuery("");
+            api.resolve(q)
+              .then((item) => {
+                setOpen(item);
+                if (item.kind !== "track") setSaved((s) => [item, ...s.filter((x) => x.id !== item.id)]);
+              })
+              .catch((e) => toast(errText(e), true));
+          }}
           onSettings={() => setSettingsOpen(true)}
           view={view}
           onToggleView={() => setView((v) => (v === "player" ? "overview" : "player"))}
@@ -389,6 +414,8 @@ export default function App() {
             error={discoverError}
             me={me}
             playlists={playlists}
+            saved={saved}
+            onForget={(id) => setSaved((s) => s.filter((x) => x.id !== id))}
             open={open}
             onOpen={(item) => (setOpen(item), setQuery(""))}
             onLogin={login}

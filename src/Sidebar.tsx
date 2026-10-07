@@ -13,12 +13,15 @@ type Props = {
   error: string | null;
   me: Me | null;
   playlists: SpItem[];
+  /** opened from pasted links; kept on this Mac */
+  saved: SpItem[];
+  onForget: (id: string) => void;
   open: SpItem | null;
   onOpen: (item: SpItem) => void;
   onLogin: () => void;
 };
 
-export function Sidebar({ households, household, onHousehold, groups, selected, onSelect, onRefresh, error, me, playlists, open, onOpen, onLogin }: Props) {
+export function Sidebar({ households, household, onHousehold, groups, selected, onSelect, onRefresh, error, me, playlists, saved, onForget, open, onOpen, onLogin }: Props) {
   const current = households.find((h) => h.id === household);
   return (
     <aside className="sidebar">
@@ -56,26 +59,41 @@ export function Sidebar({ households, household, onHousehold, groups, selected, 
         <h2>Your library</h2>
         {me?.image && <img className="avatar" src={me.image} alt="" title={me.name} />}
       </div>
-      {me ? (
-        <ul className="lib-list">
-          {[LIKED, ...playlists].map((p) => (
-            <li key={p.kind + p.id}>
-              <button className={`lib-item ${open?.id === p.id ? "active" : ""}`} onClick={() => onOpen(p)}>
-                {p.kind === "liked" ? <div className="art liked"><Icon.Heart /></div> : <Art src={p.image} />}
-                <span className="room-text">
-                  <span className="room-name">{p.name}</span>
-                  <span className="room-sub">{p.subtitle}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="pad">
-          <p className="muted small">Log in to see your playlists and liked songs.</p>
-          <button className="btn primary" onClick={onLogin}>Log in to Spotify</button>
-        </div>
-      )}
+      {(() => {
+        const ids = new Set(playlists.map((p) => p.id));
+        const extra = saved.filter((p) => !ids.has(p.id));
+        const items = me ? [LIKED, ...playlists, ...extra] : extra;
+        return (
+          <>
+            {!me && (
+              <div className="pad">
+                <p className="muted small">
+                  Paste a Spotify playlist link in the search box to open it here, or log in to see all your playlists.
+                </p>
+                <button className="btn primary" onClick={onLogin}>Log in to Spotify</button>
+              </div>
+            )}
+            <ul className="lib-list">
+              {items.map((p) => (
+                <li key={p.kind + p.id} className="lib-row">
+                  <button className={`lib-item ${open?.id === p.id ? "active" : ""}`} onClick={() => onOpen(p)}>
+                    {p.kind === "liked" ? <div className="art liked"><Icon.Heart /></div> : <Art src={p.image} />}
+                    <span className="room-text">
+                      <span className="room-name">{p.name}</span>
+                      <span className="room-sub">{p.subtitle}</span>
+                    </span>
+                  </button>
+                  {extra.includes(p) && (
+                    <button className="icon-btn xs forget" title="Remove from library" onClick={() => onForget(p.id)}>
+                      <Icon.X />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        );
+      })()}
     </aside>
   );
 }

@@ -860,6 +860,12 @@ async fn sync_pull(app: State<'_, App>) -> Res<bool> {
     }
 }
 
+/// Open a pasted Spotify link without logging in.
+#[tauri::command]
+async fn spotify_resolve(app: State<'_, App>, link: String) -> Res<SpItem> {
+    spotify::resolve(&app.http, &link).await
+}
+
 // ------------------------------------------------------------------ votes + added by
 
 async fn social_ctx(app: &App) -> Option<(String, String)> {
@@ -1005,6 +1011,7 @@ pub fn run() {
             leave_group,
             get_floorplan,
             save_floorplan,
+            spotify_resolve,
             sync_pull,
             get_social,
             vote_track,

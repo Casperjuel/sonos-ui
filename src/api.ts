@@ -102,6 +102,8 @@ export const api = {
   saveFloorplan: (fp: Floorplan) => invoke<void>("save_floorplan", { json: JSON.stringify(fp) }),
   /** fetch what others shared for this system; true when something changed */
   syncPull: () => invoke<boolean>("sync_pull"),
+  /** a pasted Spotify link as something to open; works without logging in */
+  resolve: (link: string) => invoke<SpItem>("spotify_resolve", { link }),
   /** votes and "added by" on the active system */
   social: () => invoke<TrackSocial[]>("get_social"),
   vote: (track: TrackMeta, value: -1 | 0 | 1, person: Person | null) => invoke<TrackSocial[]>("vote_track", { track, value, person }),
@@ -120,6 +122,8 @@ export type Floorplan = { image?: string; pins: Record<string, { x: number; y: n
 
 /** where Sonos put it: "top" means the queue wasn't playing, so it can't go after the current song */
 export type Queued = { added: number; placed: "afterCurrent" | "top" | "end" };
+
+export const isSpotifyLink = (q: string) => /(open\.spotify\.com\/|spotify:)(playlist|album|artist|track)[/:]/.test(q.trim());
 
 /** a song as voters see it */
 export type TrackMeta = { key: string; title: string; artist?: string; art?: string };

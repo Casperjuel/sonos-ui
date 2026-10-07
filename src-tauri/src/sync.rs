@@ -311,6 +311,23 @@ pub async fn change(http: &reqwest::Client, household: &str, device: &str, c: Ch
     Err(last)
 }
 
+// ------------------------------------------------------------------ spotify
+
+/// A client-credentials token for Spotify's public catalogue (search, albums,
+/// artists), made by the sync service so the client secret isn't in the app.
+pub async fn spotify_token(http: &reqwest::Client) -> Res<serde_json::Value> {
+    let r = http
+        .get(format!("{SYNC_URL}/spotify-token"))
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !r.status().is_success() {
+        return Err(format!("HTTP {}", r.status()));
+    }
+    r.json().await.map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -340,6 +357,13 @@ mod tests {
             Pulled::Doc { shared, .. } => assert!(shared == s),
             _ => panic!("expected doc"),
         }
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_spotify_token() {
+        let v = spotify_token(&reqwest::Client::new()).await.unwrap();
+        assert!(v["access_token"].as_str().is_some_and(|t| !t.is_empty()));
     }
 
     #[tokio::test]
