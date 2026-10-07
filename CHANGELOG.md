@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/Casperjuel/sponos/compare/v0.6.0...v0.7.0) (2026-10-07)
+
+
+### Features
+
+* guided Spotify setup that walks you through creating your own Spotify app ([b80346d](https://github.com/Casperjuel/sponos/commit/b80346df081bbbd0536c1fe77c0480fe89c2acbf))
+
+
+### Bug Fixes
+
+* clearer wording for the Spotify app in Settings ([66b602c](https://github.com/Casperjuel/sponos/commit/66b602cb12eb6da9083b1bc18241810e67e4356a))
+* Spotify in Settings is simply connected or not ([0b19218](https://github.com/Casperjuel/sponos/commit/0b192187d8af1acd223a1cc942b1f2c4728ce150))
+
 ## [0.6.0](https://github.com/Casperjuel/sponos/compare/v0.5.0...v0.6.0) (2026-10-07)
 
 
