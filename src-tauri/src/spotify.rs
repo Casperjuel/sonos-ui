@@ -229,9 +229,9 @@ impl Spotify {
                     (_, Some(err)) => Err(format!("Spotify login cancelled ({err})")),
                     _ => Err("Spotify didn't return a code".to_string()),
                 };
-                let msg = if result.is_ok() { "Logged in. You can close this tab and go back to Sonos UI." } else { "Login failed. Check the app for details." };
+                let msg = if result.is_ok() { "Logged in. You can close this tab and go back to Sponos." } else { "Login failed. Check the app for details." };
                 let html = format!(
-                    "<!doctype html><meta charset=utf-8><title>Sonos UI</title><body style=\"font:16px -apple-system,sans-serif;background:#121212;color:#eee;display:grid;place-items:center;height:100vh;margin:0\"><p>{msg}</p>"
+                    "<!doctype html><meta charset=utf-8><title>Sponos</title><body style=\"font:16px -apple-system,sans-serif;background:#121212;color:#eee;display:grid;place-items:center;height:100vh;margin:0\"><p>{msg}</p>"
                 );
                 let _ = sock
                     .write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{html}", html.len()).as_bytes())

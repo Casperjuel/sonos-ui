@@ -1,4 +1,6 @@
-# Sonos UI
+<img src="src-tauri/icons/128x128@2x.png" width="128" alt="">
+
+# Sponos
 
 A fast desktop controller for Sonos speakers on macOS, with Spotify search and queueing.
 
@@ -11,7 +13,7 @@ A fast desktop controller for Sonos speakers on macOS, with Spotify search and q
 
 ## Install
 
-**[Download Sonos-UI.dmg](https://github.com/casperjuel/sonos-ui/releases/latest/download/Sonos-UI.dmg)**, open it and drag **Sonos UI** to Applications.
+**[Download Sponos.dmg](https://github.com/casperjuel/sonos-ui/releases/latest/download/Sponos.dmg)**, open it and drag **Sponos** to Applications.
 
 If macOS says the app can't be opened, go to System Settings → Privacy & Security, scroll down and click **Open Anyway**. You only need to do this once.
 
@@ -29,7 +31,7 @@ pnpm tauri dev
 
 ## Release
 
-Releases use [release-please](https://github.com/googleapis/release-please). Write [conventional commits](https://www.conventionalcommits.org) (`feat: …`, `fix: …`) on `main`, and release-please keeps a "release vX.Y.Z" pull request up to date. Merging that PR tags the release. GitHub Actions then builds a universal (Apple Silicon + Intel) app and attaches it as `Sonos-UI.dmg`. The download link above always points at the newest release.
+Releases use [release-please](https://github.com/googleapis/release-please). Write [conventional commits](https://www.conventionalcommits.org) (`feat: …`, `fix: …`) on `main`, and release-please keeps a "release vX.Y.Z" pull request up to date. Merging that PR tags the release. GitHub Actions then builds a universal (Apple Silicon + Intel) app and attaches it as `Sponos.dmg`. The download link above always points at the newest release.
 
 The Spotify client ID is compiled in. Set the repository variable `SPOTIFY_CLIENT_ID` to use a different one. No secret is needed, because login uses PKCE.
 

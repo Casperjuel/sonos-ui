@@ -48,7 +48,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, now: Option<&str>, playing: bool) 
             &MenuItem::with_id(app, "next", "Next", true, None::<&str>)?,
             &MenuItem::with_id(app, "previous", "Previous", true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
-            &MenuItem::with_id(app, "show", "Show Sonos UI", true, None::<&str>)?,
+            &MenuItem::with_id(app, "show", "Show Sponos", true, None::<&str>)?,
             &MenuItem::with_id(app, "mini", "Mini player", true, None::<&str>)?,
             &MenuItem::with_id(app, "full", "Full player", true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,

@@ -3,8 +3,8 @@ name: Release
 # release-please keeps a "release vX.Y.Z" PR up to date from conventional
 # commits (feat:, fix:). Merging it tags the release, and the job below builds
 # the universal macOS app and attaches it, including a fixed-name
-# Sonos-UI.dmg so this link always serves the newest build:
-# https://github.com/<owner>/<repo>/releases/latest/download/Sonos-UI.dmg
+# Sponos.dmg so this link always serves the newest build:
+# https://github.com/<owner>/<repo>/releases/latest/download/Sponos.dmg
 on:
   push:
     branches: [main]
@@ -75,12 +75,12 @@ jobs:
           args: --target universal-apple-darwin
           tagName: ${{ env.TAG }}
 
-      - name: Attach Sonos-UI.dmg
+      - name: Attach Sponos.dmg
         run: |
-          cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg Sonos-UI.dmg
-          gh release upload "$TAG" Sonos-UI.dmg --clobber
+          cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg Sponos.dmg
+          gh release upload "$TAG" Sponos.dmg --clobber
           gh release edit "$TAG" --notes "$(gh release view "$TAG" --json body -q .body)
 
           ---
-          **Install:** download **Sonos-UI.dmg**, open it and drag Sonos UI to Applications.
+          **Install:** download **Sponos.dmg**, open it and drag Sponos to Applications.
           If macOS says it can't be opened: System Settings → Privacy & Security → **Open Anyway**."
