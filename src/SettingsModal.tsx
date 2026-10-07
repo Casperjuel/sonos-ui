@@ -1,16 +1,14 @@
 import { Fragment, useEffect, useState } from "react";
 import { api, type Household, type Me, type Settings, type SpotifyLink } from "./api";
 import { errText, type ToastFn } from "./App";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { applyGlass, applyTheme, DEFAULT_GLASS, savedGlass, savedTheme, THEMES, type GlassPrefs } from "./theme";
-
-const REDIRECT = "http://127.0.0.1:8888/callback";
 
 type Props = {
   groupId: string | null;
   household: Household | null;
   me: Me | null;
-  onLogin: () => Promise<void>;
+  /** opens the Spotify setup flow */
+  onLogin: () => void;
   onLogout: () => Promise<void>;
   onClose: () => void;
   onSaved: () => void;
@@ -98,46 +96,21 @@ export function SettingsModal({ groupId, household, me, onLogin, onLogout, onClo
                 songs you add. Songs always play through the Spotify account linked in your Sonos system.
               </p>
               <div>
-                <button type="button" className="btn primary"
-                  onClick={async () => {
-                    await api.saveSettings(s); // login needs a custom client ID on the Rust side
-                    await onLogin();
-                  }}>
-                  Log in to Spotify
-                </button>
+                <button type="button" className="btn primary" onClick={onLogin}>Connect Spotify</button>
               </div>
             </>
           )}
 
-          <details className="own-app" open={!!s.spotifyClientId}>
-            <summary>{s.spotifyClientId ? "Using your own Spotify app" : "Login says you're not registered? Use your own Spotify app"}</summary>
-            <p className="muted">
-              Sponos's built-in Spotify app only lets 5 people log in. With your own free app, you have no limit. You need
-              Spotify Premium.
-            </p>
-            <ol className="steps">
-              <li>
-                Open{" "}
-                <a href="#" onClick={(e) => (e.preventDefault(), openUrl("https://developer.spotify.com/dashboard/create"))}>
-                  developer.spotify.com/dashboard
-                </a>{" "}
-                and click <b>Create app</b>. Any name and description will do.
-              </li>
-              <li>
-                Under Redirect URIs, add <code>{REDIRECT}</code>
-                <button type="button" className="link" onClick={() => (navigator.clipboard.writeText(REDIRECT), toast("Copied"))}>Copy</button>
-                , tick <b>Web API</b>, and save.
-              </li>
-              <li>Open the app's <b>Settings</b>, copy the Client ID (and the client secret, if you like) into the fields below, and click Save.</li>
-              <li>Log in to Spotify above.</li>
-            </ol>
-            <label>Client ID<input value={s.spotifyClientId} placeholder="Empty uses the built-in app" onChange={(e) => set("spotifyClientId", e.target.value.trim())} /></label>
-            <label>
-              Client secret (optional; search then uses your app)
-              <input type="password" value={s.spotifyClientSecret} onChange={(e) => set("spotifyClientSecret", e.target.value.trim())} />
-            </label>
-            <label>Market<input value={s.market} maxLength={2} onChange={(e) => set("market", e.target.value.toUpperCase())} style={{ width: 60 }} /></label>
-          </details>
+          <div className="share-row">
+            <span>
+              {s.spotifyClientId ? "Using your own Spotify app" : "Using the built-in Spotify app"}
+              <small className="muted">
+                {s.spotifyClientId ? "No limit on who can log in." : "Only 5 people can log in with it. Set up your own to get around that."}
+              </small>
+            </span>
+            <button type="button" className="btn small" onClick={onLogin}>{s.spotifyClientId ? "Change" : "Set up"}</button>
+          </div>
+          <label>Market<input value={s.market} maxLength={2} onChange={(e) => set("market", e.target.value.toUpperCase())} style={{ width: 60 }} /></label>
         </fieldset>
 
         <fieldset>

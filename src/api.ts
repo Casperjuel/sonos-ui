@@ -102,6 +102,8 @@ export const api = {
   saveFloorplan: (fp: Floorplan) => invoke<void>("save_floorplan", { json: JSON.stringify(fp) }),
   /** fetch what others shared for this system; true when something changed */
   syncPull: () => invoke<boolean>("sync_pull"),
+  /** validate a client ID (+ secret) before logging in */
+  checkSpotifyApp: (id: string, secret: string) => invoke<void>("spotify_check_app", { id, secret }),
   /** a pasted Spotify link as something to open; works without logging in */
   resolve: (link: string) => invoke<SpItem>("spotify_resolve", { link }),
   /** votes and "added by" on the active system */

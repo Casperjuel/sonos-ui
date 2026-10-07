@@ -625,6 +625,25 @@ async fn embed_tracks(http: &reqwest::Client, kind: &str, id: &str) -> Res<Vec<S
 
 pub const NOT_REGISTERED: &str = "Your Spotify account isn't on this Spotify app's list of 5 users. Set up your own free Spotify app under Settings → Spotify, or ask the owner to add you.";
 
+/// Catch typos in the setup flow before the browser round-trip: the ID's
+/// shape, and with a secret, that Spotify accepts the pair.
+pub async fn check_app(http: &reqwest::Client, id: &str, secret: &str) -> Res<()> {
+    let hex32 = |s: &str| s.len() == 32 && s.chars().all(|c| c.is_ascii_hexdigit());
+    if !hex32(id) {
+        return Err("A client ID is 32 letters and numbers. Copy it from your app's Settings page.".into());
+    }
+    if secret.is_empty() {
+        return Ok(());
+    }
+    if !hex32(secret) {
+        return Err("A client secret is 32 letters and numbers. Click \"View client secret\" to see it.".into());
+    }
+    Spotify::token_request(http, "grant_type=client_credentials".into(), Some(&Creds { id, secret }))
+        .await
+        .map(|_| ())
+        .map_err(|_| "Spotify didn't accept that client ID and secret together. Check you copied both from the same app.".into())
+}
+
 /// A pasted Spotify link or URI (open.spotify.com/playlist/…, spotify:album:…)
 /// as something the app can open. Uses Spotify's public oEmbed for the name and
 /// cover, so it works without logging in.
@@ -667,6 +686,20 @@ mod live {
         let it = super::resolve(&http, "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=abc").await.unwrap();
         assert_eq!((it.kind.as_str(), it.name.as_str()), ("playlist", "Today’s Top Hits"));
         assert!(super::resolve(&http, "hello").await.is_err());
+    }
+
+    /// set SPOTIFY_TEST_SECRET to the built-in app's secret
+    #[tokio::test]
+    #[ignore]
+    async fn check_app_catches_typos() {
+        let http = reqwest::Client::new();
+        let id = "f8140c478dbe48838c5d51272939d2ea";
+        assert!(super::check_app(&http, "nope", "").await.is_err(), "bad id shape");
+        assert!(super::check_app(&http, id, "").await.is_ok(), "id alone is fine");
+        assert!(super::check_app(&http, id, &"0".repeat(32)).await.is_err(), "wrong secret");
+        if let Ok(secret) = std::env::var("SPOTIFY_TEST_SECRET") {
+            assert!(super::check_app(&http, id, &secret).await.is_ok(), "right pair");
+        }
     }
 
     /// a colleague's setup: no secret, not logged in

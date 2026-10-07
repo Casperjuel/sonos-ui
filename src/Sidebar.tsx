@@ -68,9 +68,9 @@ export function Sidebar({ households, household, onHousehold, groups, selected, 
             {!me && (
               <div className="pad">
                 <p className="muted small">
-                  Paste a Spotify playlist link in the search box to open it here, or log in to see all your playlists.
+                  Connect Spotify to see your playlists and liked songs, or paste a playlist link in the search box.
                 </p>
-                <button className="btn primary" onClick={onLogin}>Log in to Spotify</button>
+                <button className="btn primary" onClick={onLogin}>Connect Spotify</button>
               </div>
             )}
             <ul className="lib-list">

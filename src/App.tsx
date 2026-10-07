@@ -15,6 +15,7 @@ import { Sidebar } from "./Sidebar";
 import { Browse } from "./Browse";
 import { Queue } from "./Queue";
 import { SettingsModal } from "./SettingsModal";
+import { SpotifySetup } from "./SpotifySetup";
 import "./App.css";
 
 type Toast = { id: number; text: string; error?: boolean };
@@ -145,16 +146,15 @@ export default function App() {
     loadAccount();
   }, [loadAccount]);
 
-  const login = useCallback(async () => {
-    toast("Opening Spotify in your browser…");
-    try {
-      setMe(await api.login());
-      setPlaylists(await api.playlists());
-      toast("Logged in to Spotify");
-    } catch (e) {
-      toast(errText(e), true);
-    }
-  }, [toast]);
+  /** log in with the saved Spotify app; throws so the setup flow can show what went wrong */
+  const connectSpotify = useCallback(async () => {
+    const m = await api.login();
+    setMe(m);
+    setPlaylists(await api.playlists());
+    return m;
+  }, []);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const login = useCallback(() => setSetupOpen(true), []);
 
   const logout = useCallback(async () => {
     await api.logout();
@@ -441,7 +441,7 @@ export default function App() {
             groupId={groupId}
             household={households.find((h) => h.id === household) ?? null}
             me={me}
-            onLogin={login}
+            onLogin={() => (setSettingsOpen(false), login())}
             onLogout={logout}
             onClose={() => setSettingsOpen(false)}
             onSaved={() => {
@@ -453,6 +453,9 @@ export default function App() {
             }}
             toast={toast}
           />
+        )}
+        {setupOpen && (
+          <SpotifySetup me={me} connect={connectSpotify} onClose={() => (setSetupOpen(false), loadAccount())} />
         )}
         <UpdatePill />
         <div className="toasts">

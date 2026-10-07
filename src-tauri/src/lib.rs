@@ -866,6 +866,11 @@ async fn sync_pull(app: State<'_, App>) -> Res<bool> {
     }
 }
 
+#[tauri::command]
+async fn spotify_check_app(app: State<'_, App>, id: String, secret: String) -> Res<()> {
+    spotify::check_app(&app.http, id.trim(), secret.trim()).await
+}
+
 /// Open a pasted Spotify link without logging in.
 #[tauri::command]
 async fn spotify_resolve(app: State<'_, App>, link: String) -> Res<SpItem> {
@@ -1018,6 +1023,7 @@ pub fn run() {
             get_floorplan,
             save_floorplan,
             spotify_resolve,
+            spotify_check_app,
             sync_pull,
             get_social,
             vote_track,
