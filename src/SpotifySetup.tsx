@@ -41,6 +41,8 @@ export function SpotifySetup({ me, connect, onClose }: Props) {
       setSettings(s);
       setId(s.spotifyClientId);
       setSecret(s.spotifyClientSecret);
+      // set up before: just log in again
+      if (s.spotifyClientId) setStep((cur) => (cur === "intro" ? "connect" : cur));
     });
   }, []);
 
@@ -206,6 +208,9 @@ export function SpotifySetup({ me, connect, onClose }: Props) {
               Your browser opens Spotify. Click <b>Agree</b>, then come back here.
             </p>
             {error && <div className="setup-error">{error}</div>}
+            {settings?.spotifyClientId && (
+              <button className="link small" onClick={() => setStep("create")}>Set up with a different Spotify app</button>
+            )}
             <div className="setup-actions">
               <button className="btn" onClick={() => setStep(settings?.spotifyClientId ? "keys" : "intro")}>Back</button>
               <button className="btn primary" disabled={busy} onClick={login}>

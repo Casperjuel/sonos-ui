@@ -86,33 +86,17 @@ export function SettingsModal({ groupId, household, me, onLogin, onLogout, onClo
           {me ? (
             <div className="account">
               {me.image && <img className="avatar" src={me.image} alt="" />}
-              <span>Logged in as <b>{me.name}</b></span>
+              <span>Connected as <b>{me.name}</b></span>
               <button type="button" className="btn" onClick={onLogout}>Log out</button>
             </div>
           ) : (
             <>
-              <p className="muted">
-                Search works without logging in. Log in to see all your playlists and liked songs, and to show your face on
-                songs you add. Songs always play through the Spotify account linked in your Sonos system.
-              </p>
+              <p className="muted">Connect to see your playlists and liked songs, and to show your face on songs you add.</p>
               <div>
                 <button type="button" className="btn primary" onClick={onLogin}>Connect Spotify</button>
               </div>
             </>
           )}
-
-          <div className="share-row">
-            <span>
-              {s.spotifyClientId ? "Connected through your own Spotify app" : "Connected through the shared Sponos app"}
-              <small className="muted">
-                {s.spotifyClientId
-                  ? "The developer app you created. Change it if you made a new one."
-                  : "It has room for 5 people. Set up your own app if you're not one of them."}
-              </small>
-            </span>
-            <button type="button" className="btn small" onClick={onLogin}>{s.spotifyClientId ? "Change" : "Set up"}</button>
-          </div>
-          <label>Country for search results<input value={s.market} maxLength={2} onChange={(e) => set("market", e.target.value.toUpperCase())} style={{ width: 60 }} /></label>
         </fieldset>
 
         <fieldset>
