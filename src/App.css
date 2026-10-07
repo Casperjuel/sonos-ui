@@ -470,3 +470,19 @@ section { margin-top: 18px; }
 .btn.wide { align-self: stretch; }
 .btn.small { padding: 5px 12px; font-size: 12px; }
 .modal.setup .link.small { align-self: flex-start; font-size: 12px; color: var(--dim); }
+
+/* ---- About */
+.modal.about { width: 540px; position: relative; padding: 28px; gap: 16px; }
+.about-head { display: flex; align-items: center; gap: 16px; }
+.about-icon { width: 72px; height: 72px; filter: drop-shadow(0 8px 18px #0007); }
+.about-head h2 { font-size: 24px; letter-spacing: -.01em; }
+.about-head p { margin-top: 2px; font-size: 12px; }
+.about-tagline { font-size: 14px !important; }
+.about-features { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.about-features li { display: grid; grid-template-columns: 30px 1fr; column-gap: 10px; align-items: start; padding: 10px; border-radius: 10px; background: color-mix(in srgb, var(--text) 4%, transparent); border: 1px solid var(--line); }
+.about-features b { font-size: 13px; font-weight: 600; }
+.about-features small { grid-column: 2; color: var(--dim); font-size: 11.5px; line-height: 1.4; }
+.about-feature-icon { grid-row: span 2; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
+.about-privacy { line-height: 1.5; }
+.about-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.about-foot { border-top: 1px solid var(--line); padding-top: 12px; text-align: center; }

@@ -163,3 +163,25 @@ fn icon() -> Image<'static> {
     }
     Image::new_owned(px, S as u32, S as u32)
 }
+
+/// The app menu: macOS's standard one, with About / Check for Updates /
+/// Settings items that the frontend handles (via the "tray" event).
+pub fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    use tauri::menu::{MenuItemKind, PredefinedMenuItem};
+    let menu = Menu::default(app)?;
+    if let Some(MenuItemKind::Submenu(sub)) = menu.items()?.into_iter().next() {
+        // the stock About panel only takes plain text; ours is a page in the app
+        sub.remove_at(0)?;
+        sub.insert(&MenuItem::with_id(app, "about", "About Sponos", true, None::<&str>)?, 0)?;
+        sub.insert(&MenuItem::with_id(app, "check-updates", "Check for Updates…", true, None::<&str>)?, 1)?;
+        sub.insert(&PredefinedMenuItem::separator(app)?, 2)?;
+        sub.insert(&MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?, 3)?;
+    }
+    Ok(menu)
+}
+
+/// The commit CI built from, for the About page.
+#[tauri::command]
+pub fn build_info() -> Option<String> {
+    option_env!("GITHUB_SHA").map(|s| s[..7.min(s.len())].to_string())
+}

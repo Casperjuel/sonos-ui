@@ -16,6 +16,7 @@ import { Browse } from "./Browse";
 import { Queue } from "./Queue";
 import { SettingsModal } from "./SettingsModal";
 import { SpotifySetup } from "./SpotifySetup";
+import { About } from "./About";
 import "./App.css";
 
 type Toast = { id: number; text: string; error?: boolean };
@@ -154,6 +155,7 @@ export default function App() {
     return m;
   }, []);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const login = useCallback(() => setSetupOpen(true), []);
 
   const logout = useCallback(async () => {
@@ -310,6 +312,8 @@ export default function App() {
   useEffect(() => {
     const un = listen<string>("tray", ({ payload }) => {
       if (payload === "mini") toggleMini(true);
+      else if (payload === "settings") (toggleMini(false), setSettingsOpen(true));
+      else if (payload === "about") (toggleMini(false), setAboutOpen(true));
       else if (payload === "full") toggleMini(false);
       else if (payload === "toggle" || payload === "next" || payload === "previous") transport(payload);
     });
@@ -454,10 +458,11 @@ export default function App() {
             toast={toast}
           />
         )}
+        {aboutOpen && <About onClose={() => setAboutOpen(false)} />}
         {setupOpen && (
           <SpotifySetup me={me} connect={connectSpotify} onClose={() => (setSetupOpen(false), loadAccount())} />
         )}
-        <UpdatePill />
+        <UpdatePill toast={toast} />
         <div className="toasts">
           {toasts.map((t) => (
             <div key={t.id} className={`toast ${t.error ? "error" : ""}`}>

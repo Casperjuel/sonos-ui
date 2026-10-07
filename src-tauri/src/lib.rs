@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sonos::{Group, Item, PlayerState, Res, SpotifyLink, Svc};
 use spotify::{Creds, Me, PlayerQueue, SearchResult, SpItem, Spotify};
 use std::{collections::HashMap, path::PathBuf, time::Duration};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
 /// Shared Spotify app, baked in at build time (`SPOTIFY_CLIENT_ID`). Logging in
@@ -979,6 +979,13 @@ pub fn run() {
                 social: Default::default(),
             });
             tray::setup(app.handle())?;
+            app.set_menu(tray::app_menu(app.handle())?)?;
+            app.on_menu_event(|app, e| {
+                if matches!(e.id().as_ref(), "about" | "check-updates" | "settings") {
+                    tray::show(app);
+                    let _ = app.emit("tray", e.id().as_ref().to_string());
+                }
+            });
             Ok(())
         })
         // closing the window keeps the app alive in the menu bar; Quit lives in the tray menu
@@ -1017,6 +1024,7 @@ pub fn run() {
             spotify_add_to_player_queue,
             queue_spotify,
             tray::tray_update,
+            tray::build_info,
             overview,
             join_group,
             leave_group,
