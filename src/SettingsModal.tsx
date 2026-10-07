@@ -103,14 +103,16 @@ export function SettingsModal({ groupId, household, me, onLogin, onLogout, onClo
 
           <div className="share-row">
             <span>
-              {s.spotifyClientId ? "Using your own Spotify app" : "Using the built-in Spotify app"}
+              {s.spotifyClientId ? "Connected through your own Spotify app" : "Connected through the shared Sponos app"}
               <small className="muted">
-                {s.spotifyClientId ? "No limit on who can log in." : "Only 5 people can log in with it. Set up your own to get around that."}
+                {s.spotifyClientId
+                  ? "The developer app you created. Change it if you made a new one."
+                  : "It has room for 5 people. Set up your own app if you're not one of them."}
               </small>
             </span>
             <button type="button" className="btn small" onClick={onLogin}>{s.spotifyClientId ? "Change" : "Set up"}</button>
           </div>
-          <label>Market<input value={s.market} maxLength={2} onChange={(e) => set("market", e.target.value.toUpperCase())} style={{ width: 60 }} /></label>
+          <label>Country for search results<input value={s.market} maxLength={2} onChange={(e) => set("market", e.target.value.toUpperCase())} style={{ width: 60 }} /></label>
         </fieldset>
 
         <fieldset>
