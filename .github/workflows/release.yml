@@ -31,6 +31,7 @@ jobs:
     env:
       TAG: ${{ needs.release-please.outputs.tag }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
