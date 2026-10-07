@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/Casperjuel/sponos/compare/v0.4.0...v0.5.0) (2026-10-07)
+
+
+### Features
+
+* paste a Spotify playlist link to open it and keep it in your library ([34edc98](https://github.com/Casperjuel/sponos/commit/34edc980e8d32988ede820ae44914f9a8e5dfb00))
+* search Spotify without logging in ([34edc98](https://github.com/Casperjuel/sponos/commit/34edc980e8d32988ede820ae44914f9a8e5dfb00))
+
 ## [0.4.0](https://github.com/Casperjuel/sponos/compare/v0.3.0...v0.4.0) (2026-10-07)
 
 
