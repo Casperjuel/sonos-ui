@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/Casperjuel/sponos/compare/v0.3.0...v0.4.0) (2026-10-07)
+
+
+### Features
+
+* button to jump to the playing song in long queues ([0f23887](https://github.com/Casperjuel/sponos/commit/0f238874c913fc27e002ad15a6aad286b225d773))
+* show who added a song (Spotify avatar and name) in the queue and on the now-playing screen ([0f23887](https://github.com/Casperjuel/sponos/commit/0f238874c913fc27e002ad15a6aad286b225d773))
+* vote songs up or down, shared with everyone on the Sonos system ([0f23887](https://github.com/Casperjuel/sponos/commit/0f238874c913fc27e002ad15a6aad286b225d773))
+
+
+### Bug Fixes
+
+* explain why macOS asks for local network access ([a819de0](https://github.com/Casperjuel/sponos/commit/a819de0a3da866f324c7bd13a1bed6c17b86e2dc))
+* icon buttons in the top bar no longer squeeze into ovals ([0f23887](https://github.com/Casperjuel/sponos/commit/0f238874c913fc27e002ad15a6aad286b225d773))
+* mini player play button stays round and the volume slider stays inside the window ([130d6e2](https://github.com/Casperjuel/sponos/commit/130d6e2d0c8f7f2cacbb1a1951d9245125340f77))
+* Spotify login in release builds used an empty client ID ([a819de0](https://github.com/Casperjuel/sponos/commit/a819de0a3da866f324c7bd13a1bed6c17b86e2dc))
+
 ## [0.3.0](https://github.com/Casperjuel/sponos/compare/v0.2.0...v0.3.0) (2026-10-07)
 
 
