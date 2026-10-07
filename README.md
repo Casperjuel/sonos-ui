@@ -13,7 +13,7 @@ A fast desktop controller for Sonos speakers on macOS, with Spotify search and q
 
 ## Install
 
-**[Download Sponos.dmg](https://github.com/casperjuel/sonos-ui/releases/latest/download/Sponos.dmg)**, open it and drag **Sponos** to Applications.
+**[Download Sponos.dmg](https://github.com/casperjuel/sponos/releases/latest/download/Sponos.dmg)**, open it and drag **Sponos** to Applications.
 
 If macOS says the app can't be opened, go to System Settings → Privacy & Security, scroll down and click **Open Anyway**. You only need to do this once.
 
