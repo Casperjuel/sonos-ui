@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/Casperjuel/sponos/compare/v0.7.0...v0.8.0) (2026-10-07)
+
+
+### Features
+
+* richer About page, Check for Updates and Settings in the app menu ([bf09a37](https://github.com/Casperjuel/sponos/commit/bf09a3725936687f1bcf41faac88a193847a13cc))
+* zoom and pan the floorplan, with an Organize speakers mode for moving them ([cb7b003](https://github.com/Casperjuel/sponos/commit/cb7b003409dff56cd53351d9dca93e077f0ce174))
+
 ## [0.7.0](https://github.com/Casperjuel/sponos/compare/v0.6.0...v0.7.0) (2026-10-07)
 
 
