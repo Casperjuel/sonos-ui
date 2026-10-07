@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, fmt, hms, type Group, type Item, type PlayerQueue, type PlayerState, type SpItem } from "./api";
 import type { Run } from "./App";
 import { Art } from "./Browse";
 import * as Icon from "./icons";
+import { AddedBy, Score } from "./Social";
 
 type Props = {
   group: Group | null;
@@ -20,10 +21,14 @@ export function Queue({ group, state, queue, spQueue, castingMine, run }: Props)
   const [over, setOver] = useState<number | null>(null);
   const total = queue.reduce((a, q) => a + hms(q.duration), 0);
   const connect = state?.source === "Spotify Connect";
+  const scroller = useRef<HTMLDivElement>(null);
+  // long queues: bring the playing song back into view
+  const jumpToCurrent = () =>
+    scroller.current?.querySelector(".qrow.current")?.scrollIntoView({ behavior: "smooth", block: "center" });
 
   return (
     <aside className="queue">
-      <div className="queue-scroll">
+      <div className="queue-scroll" ref={scroller}>
         {connect && (
           <section className="connect">
             <div className="panel-head">
@@ -48,6 +53,11 @@ export function Queue({ group, state, queue, spQueue, castingMine, run }: Props)
         <div className="panel-head">
           <h2>{connect ? "Sonos queue" : "Queue"}</h2>
           <span className="muted">{queue.length ? `${queue.length} · ${fmt(total)}` : ""}</span>
+          {(current > 0 || (connect && spQueue?.current)) && (
+            <button className="icon-btn xs" title="Go to the playing song" onClick={jumpToCurrent}>
+              <Icon.Locate />
+            </button>
+          )}
           {queue.length > 0 && (
             <button className="link" onClick={() => g && confirm("Clear the whole queue?") && run(() => api.clearQueue(g), "Queue cleared")}>
               Clear
@@ -85,8 +95,8 @@ export function Queue({ group, state, queue, spQueue, castingMine, run }: Props)
                   {n === current && state?.transport === "PLAYING" && <span className="eq"><i /><i /><i /></span>}
                 </div>
                 <div className="row-text">
-                  <div className="title">{it.title}</div>
-                  <div className="sub">{it.artist}</div>
+                  <div className="title">{it.title}<Score song={it} /></div>
+                  <div className="sub"><AddedBy song={it} />{it.artist}</div>
                 </div>
                 <span className="dur">{it.duration ? fmt(hms(it.duration)) : ""}</span>
                 <button className="icon-btn xs remove" title="Remove"
@@ -113,8 +123,8 @@ function SpRow({ item, current, playing }: { item: SpItem; current?: boolean; pl
         {current && playing && <span className="eq"><i /><i /><i /></span>}
       </div>
       <div className="row-text">
-        <div className="title">{item.name}</div>
-        <div className="sub">{item.subtitle}</div>
+        <div className="title">{item.name}<Score song={{ title: item.name, artist: item.subtitle }} /></div>
+        <div className="sub"><AddedBy song={{ title: item.name, artist: item.subtitle }} />{item.subtitle}</div>
       </div>
       <span className="dur">{item.durationMs ? fmt(item.durationMs / 1000) : ""}</span>
       <span />

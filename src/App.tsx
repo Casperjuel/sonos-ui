@@ -8,6 +8,9 @@ import { Overview } from "./Overview";
 import { accentFrom, setAccent } from "./theme";
 import { TopBar } from "./TopBar";
 import { UpdatePill } from "./Updater";
+import { SocialProvider, useSocialState, type SongRef } from "./Social";
+
+const song = (i: SpItem): SongRef => ({ title: i.name, artist: i.subtitle, art: i.image });
 import { Sidebar } from "./Sidebar";
 import { Browse } from "./Browse";
 import { Queue } from "./Queue";
@@ -219,22 +222,40 @@ export default function App() {
     [toast, state?.source],
   );
 
+  // ---- votes + who added what, shared with everyone on this Sonos system
+  const social = useSocialState(household, me, toast);
+  /** put a face on what was just queued; albums and playlists are expanded to their songs */
+  const credit = useCallback(
+    (item: SpItem) => {
+      if (!me) return;
+      if (item.kind === "track") return social.markAdded([song(item)]);
+      api.children(item).then((songs) => social.markAdded(songs.map(song))).catch(() => {});
+    },
+    [me, social],
+  );
+
   const enqueue = useCallback(
     (item: SpItem, mode: QueueMode) => {
       if (!groupId) return toast("Pick a room first", true);
       if (castingMine && mode !== "now" && item.kind === "track")
-        return run(() => api.addToSpotifyQueue(item.id), `Added ${item.name} to your Spotify queue`);
-      run(async () => report(item.name, mode, await api.queueSpotify(groupId, item, mode)));
+        return run(async () => (await api.addToSpotifyQueue(item.id), credit(item)), `Added ${item.name} to your Spotify queue`);
+      run(async () => {
+        report(item.name, mode, await api.queueSpotify(groupId, item, mode));
+        credit(item);
+      });
     },
-    [groupId, run, toast, report, castingMine],
+    [groupId, run, toast, report, castingMine, credit],
   );
 
   const enqueueMany = useCallback(
     (items: SpItem[], mode: QueueMode) => {
       if (!groupId) return toast("Pick a room first", true);
-      run(async () => report(`${items.length} songs`, mode, await api.queueTracks(groupId, items, mode)));
+      run(async () => {
+        report(`${items.length} songs`, mode, await api.queueTracks(groupId, items, mode));
+        social.markAdded(items.map(song));
+      });
     },
-    [groupId, run, toast, report],
+    [groupId, run, toast, report, social],
   );
 
   // ---- mini player
@@ -323,97 +344,99 @@ export default function App() {
 
   if (mini)
     return (
-      <>
+      <SocialProvider value={social}>
         {ambient}
         <Mini groups={groups} group={group} onSelect={setGroupId} state={state} nextUp={nextUp} fetchedAt={fetchedAt}
           run={run} pinned={pinned} onPin={() => setPinned((p) => !p)} onExpand={() => toggleMini(false)} />
         <div className="toasts mini-toasts">
           {toasts.slice(-1).map((t) => <div key={t.id} className={`toast ${t.error ? "error" : ""}`}>{t.text}</div>)}
         </div>
-      </>
+      </SocialProvider>
     );
 
   return (
-    <div className="app">
-      {ambient}
-      <TopBar
-        onMini={() => toggleMini(true)}
-        group={group}
-        state={state}
-        fetchedAt={fetchedAt}
-        run={run}
-        query={query}
-        onQuery={(q) => (setQuery(q), setOpen(null), q && setView("player"))}
-        onSettings={() => setSettingsOpen(true)}
-        view={view}
-        onToggleView={() => setView((v) => (v === "player" ? "overview" : "player"))}
-      />
-      {view === "overview" ? (
-        <div className="body overview-body">
-          {/* keyed per system so each loads its own floorplan */}
-          <Overview key={household ?? "none"} syncTick={syncTick} run={run} toast={toast} onRegrouped={discover}
-            onOpenRoom={(id) => (setGroupId(id), setView("player"))} />
-        </div>
-      ) : (
-      <div className="body">
-        <Sidebar
-          households={households}
-          household={household}
-          onHousehold={switchHousehold}
-          groups={groups}
-          selected={groupId}
-          onSelect={setGroupId}
-          onRefresh={discover}
-          error={discoverError}
-          me={me}
-          playlists={playlists}
-          open={open}
-          onOpen={(item) => (setOpen(item), setQuery(""))}
-          onLogin={login}
-        />
-        <Browse
-          query={query}
-          nonce={searchNonce}
-          open={open}
-          setOpen={setOpen}
-          state={state}
+    <SocialProvider value={social}>
+      <div className="app">
+        {ambient}
+        <TopBar
+          onMini={() => toggleMini(true)}
           group={group}
-          enqueue={enqueue}
-          enqueueMany={enqueueMany}
+          state={state}
+          fetchedAt={fetchedAt}
+          run={run}
+          query={query}
+          onQuery={(q) => (setQuery(q), setOpen(null), q && setView("player"))}
           onSettings={() => setSettingsOpen(true)}
-          onLogin={login}
-          loggedIn={!!me}
+          view={view}
+          onToggleView={() => setView((v) => (v === "player" ? "overview" : "player"))}
         />
-        <Queue group={group} state={state} queue={queue} spQueue={spQueue} castingMine={castingMine} run={run} />
-      </div>
-      )}
-      {settingsOpen && (
-        <SettingsModal
-          groupId={groupId}
-          household={households.find((h) => h.id === household) ?? null}
-          me={me}
-          onLogin={login}
-          onLogout={logout}
-          onClose={() => setSettingsOpen(false)}
-          onSaved={() => {
-            setSettingsOpen(false);
-            toast("Settings saved");
-            setSearchNonce((n) => n + 1); // re-run a search that failed for lack of credentials
-            discover();
-            loadAccount();
-          }}
-          toast={toast}
-        />
-      )}
-      <UpdatePill />
-      <div className="toasts">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast ${t.error ? "error" : ""}`}>
-            {t.text}
+        {view === "overview" ? (
+          <div className="body overview-body">
+            {/* keyed per system so each loads its own floorplan */}
+            <Overview key={household ?? "none"} syncTick={syncTick} run={run} toast={toast} onRegrouped={discover}
+              onOpenRoom={(id) => (setGroupId(id), setView("player"))} />
           </div>
-        ))}
+        ) : (
+        <div className="body">
+          <Sidebar
+            households={households}
+            household={household}
+            onHousehold={switchHousehold}
+            groups={groups}
+            selected={groupId}
+            onSelect={setGroupId}
+            onRefresh={discover}
+            error={discoverError}
+            me={me}
+            playlists={playlists}
+            open={open}
+            onOpen={(item) => (setOpen(item), setQuery(""))}
+            onLogin={login}
+          />
+          <Browse
+            query={query}
+            nonce={searchNonce}
+            open={open}
+            setOpen={setOpen}
+            state={state}
+            group={group}
+            enqueue={enqueue}
+            enqueueMany={enqueueMany}
+            onSettings={() => setSettingsOpen(true)}
+            onLogin={login}
+            loggedIn={!!me}
+          />
+          <Queue group={group} state={state} queue={queue} spQueue={spQueue} castingMine={castingMine} run={run} />
+        </div>
+        )}
+        {settingsOpen && (
+          <SettingsModal
+            groupId={groupId}
+            household={households.find((h) => h.id === household) ?? null}
+            me={me}
+            onLogin={login}
+            onLogout={logout}
+            onClose={() => setSettingsOpen(false)}
+            onSaved={() => {
+              setSettingsOpen(false);
+              toast("Settings saved");
+              setSearchNonce((n) => n + 1); // re-run a search that failed for lack of credentials
+              discover();
+              loadAccount();
+            }}
+            toast={toast}
+          />
+        )}
+        <UpdatePill />
+        <div className="toasts">
+          {toasts.map((t) => (
+            <div key={t.id} className={`toast ${t.error ? "error" : ""}`}>
+              {t.text}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </SocialProvider>
   );
 }
 

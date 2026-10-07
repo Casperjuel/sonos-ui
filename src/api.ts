@@ -102,6 +102,10 @@ export const api = {
   saveFloorplan: (fp: Floorplan) => invoke<void>("save_floorplan", { json: JSON.stringify(fp) }),
   /** fetch what others shared for this system; true when something changed */
   syncPull: () => invoke<boolean>("sync_pull"),
+  /** votes and "added by" on the active system */
+  social: () => invoke<TrackSocial[]>("get_social"),
+  vote: (track: TrackMeta, value: -1 | 0 | 1, person: Person | null) => invoke<TrackSocial[]>("vote_track", { track, value, person }),
+  markAdded: (tracks: TrackMeta[], person: Person) => invoke<TrackSocial[]>("mark_added", { tracks, person }),
   /** the logged-in user's Spotify Connect queue */
   addToSpotifyQueue: (id: string) => invoke<void>("spotify_add_to_player_queue", { id }),
 };
@@ -116,6 +120,29 @@ export type Floorplan = { image?: string; pins: Record<string, { x: number; y: n
 
 /** where Sonos put it: "top" means the queue wasn't playing, so it can't go after the current song */
 export type Queued = { added: number; placed: "afterCurrent" | "top" | "end" };
+
+/** a song as voters see it */
+export type TrackMeta = { key: string; title: string; artist?: string; art?: string };
+export type Person = { name: string; image?: string };
+export type TrackSocial = TrackMeta & {
+  up: number;
+  down: number;
+  /** this device's vote */
+  mine: -1 | 0 | 1;
+  upBy: string[];
+  downBy: string[];
+  /** only for songs added from Sponos by someone logged in to Spotify */
+  addedBy?: Person & { at: number; me: boolean };
+  at: number;
+};
+
+/** The same song from the queue, Spotify Connect or search: title without
+ * " - Remastered"/"(feat. …)", plus the first artist. */
+export const trackKey = (title?: string, artist?: string) => {
+  const t = (title ?? "").toLowerCase().replace(/\s+-\s+.*$|\s*[(\[].*$/, "").trim();
+  const a = (artist ?? "").toLowerCase().split(/\s*(?:,|&|\bfeat\.?|\bft\.?)\s*/)[0].trim();
+  return `${t}|${a}`;
+};
 
 /** loose title match — Sonos and Spotify disagree on "- Remastered" suffixes etc. */
 export const sameTitle = (a?: string, b?: string) => {

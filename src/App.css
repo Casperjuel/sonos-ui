@@ -50,6 +50,7 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
 .icon-btn {
   display: inline-grid; place-items: center; position: relative;
   width: 32px; height: 32px; border-radius: 50%;
+  flex: none; /* flex rows would squeeze it into an oval */
   color: var(--dim); transition: color .12s, background .12s;
 }
 .icon-btn:hover:not(:disabled) { color: var(--text); background: var(--hover); }
@@ -407,3 +408,27 @@ section { margin-top: 18px; }
 
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 5px; border: 3px solid transparent; background-clip: content-box; }
+
+/* ---- votes + added by */
+.votes { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+.vote { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; transition: color .15s, background .15s, border-color .15s, transform .15s; }
+.vote:hover { color: var(--text); border-color: var(--dim); }
+.vote:active { transform: scale(.94); }
+.vote.up.mine { color: #000; background: var(--green); border-color: var(--green); }
+.vote.down.mine { color: #fff; background: #c2453a; border-color: #c2453a; }
+.vote.mine svg { animation: vote-pop .35s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes vote-pop { 50% { transform: scale(1.35) rotate(-8deg); } }
+.votes.compact { margin: 0; gap: 2px; }
+.votes.compact .vote { padding: 4px 6px; border: 0; gap: 3px; font-size: 11px; }
+.votes.compact .vote svg { width: 14px; height: 14px; }
+.votes.compact .vote.up.mine { background: none; color: var(--green); }
+.votes.compact .vote.down.mine { background: none; color: #e0645a; }
+
+.score { margin-left: 6px; padding: 0 5px; border-radius: 6px; font-size: 10px; font-weight: 600; vertical-align: 1px; background: var(--line); color: var(--dim); font-variant-numeric: tabular-nums; }
+.score.pos { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
+.score.neg { background: #c2453a33; color: #e0645a; }
+
+.added-by { width: 14px; height: 14px; border-radius: 50%; object-fit: cover; margin-right: 5px; vertical-align: -3px; display: inline-block; }
+.added-by.initial { background: var(--green); color: #000; font-size: 9px; font-weight: 700; text-align: center; line-height: 14px; }
+.added-by-line { margin-top: 10px; font-size: 12px; color: var(--dim); display: flex; align-items: center; justify-content: center; }
+.added-by-line .added-by { width: 18px; height: 18px; line-height: 18px; margin-right: 7px; vertical-align: 0; }

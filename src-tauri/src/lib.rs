@@ -41,6 +41,8 @@ struct Settings {
     preferred_household: Option<String>,
     /// don't share floorplan/name/Spotify link with others on the network
     local_only: bool,
+    /// random id for this install; votes and "added by" are tied to it
+    device_id: String,
 }
 
 struct App {
@@ -60,6 +62,8 @@ struct App {
     local_rev: std::sync::atomic::AtomicU64,
     /// one push or pull at a time
     sync_lock: Mutex<()>,
+    /// votes and "added by" per household: (etag, tracks)
+    social: Mutex<HashMap<String, (String, Vec<sync::TrackSocial>)>>,
 }
 
 impl App {
@@ -105,6 +109,7 @@ async fn save_settings(app: State<'_, App>, handle: AppHandle, mut settings: Set
         settings.household_names = cur.household_names.clone();
         settings.preferred_household = cur.preferred_household.clone();
         settings.spotify_overrides = cur.spotify_overrides.clone();
+        settings.device_id = cur.device_id.clone();
     }
     match (settings.spotify_sid, settings.spotify_sn) {
         (Some(sid), Some(sn)) => drop(settings.spotify_overrides.insert(hh.clone(), (sid, sn))),
@@ -854,6 +859,60 @@ async fn sync_pull(app: State<'_, App>) -> Res<bool> {
     }
 }
 
+// ------------------------------------------------------------------ votes + added by
+
+async fn social_ctx(app: &App) -> Option<(String, String)> {
+    let hh = app.household().await;
+    let s = app.settings.lock().await;
+    (!hh.is_empty() && !s.local_only).then(|| (hh, s.device_id.clone()))
+}
+
+async fn store_social(app: &App, hh: String, etag: String, tracks: Vec<sync::TrackSocial>) -> Vec<sync::TrackSocial> {
+    app.social.lock().await.insert(hh, (etag, tracks.clone()));
+    tracks
+}
+
+/// Votes and who added what on the active system, newest first.
+#[tauri::command]
+async fn get_social(app: State<'_, App>) -> Res<Vec<sync::TrackSocial>> {
+    let Some((hh, device)) = social_ctx(&app).await else { return Ok(vec![]) };
+    let cached = app.social.lock().await.get(&hh).cloned();
+    match sync::social(&app.http, &hh, &device, cached.as_ref().map(|c| c.0.as_str())).await {
+        Ok(Some((etag, tracks))) => Ok(store_social(&app, hh, etag, tracks).await),
+        Ok(None) => Ok(cached.map(|c| c.1).unwrap_or_default()),
+        Err(e) => {
+            eprintln!("social: {e}"); // offline: keep showing the last known state
+            Ok(cached.map(|c| c.1).unwrap_or_default())
+        }
+    }
+}
+
+/// `value` 1 (up), -1 (down) or 0 (take back).
+#[tauri::command]
+async fn vote_track(
+    app: State<'_, App>,
+    track: sync::TrackMeta,
+    value: i8,
+    person: Option<sync::Person>,
+) -> Res<Vec<sync::TrackSocial>> {
+    let (hh, device) = social_ctx(&app).await.ok_or("Voting needs sharing turned on in Settings → Sonos")?;
+    let change = sync::Change { person: person.as_ref(), vote: Some((&track, value.clamp(-1, 1))), added: &[] };
+    let (etag, tracks) = sync::change(&app.http, &hh, &device, change).await?;
+    Ok(store_social(&app, hh, etag, tracks).await)
+}
+
+/// Remember who added these songs, so others see a face next to them in the queue.
+#[tauri::command]
+async fn mark_added(app: State<'_, App>, tracks: Vec<sync::TrackMeta>, person: sync::Person) -> Res<Vec<sync::TrackSocial>> {
+    let Some((hh, device)) = social_ctx(&app).await else { return Ok(vec![]) };
+    if tracks.is_empty() {
+        return Ok(vec![]);
+    }
+    let change = sync::Change { person: Some(&person), vote: None, added: &tracks };
+    let (etag, all) = sync::change(&app.http, &hh, &device, change).await?;
+    Ok(store_social(&app, hh, etag, all).await)
+}
+
 // ------------------------------------------------------------------ boot
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -878,6 +937,11 @@ pub fn run() {
                 settings.spotify_client_secret =
                     std::env::var("SPOTIFY_CLIENT_SECRET").unwrap_or_default();
             }
+            if settings.device_id.is_empty() {
+                use rand::RngExt;
+                settings.device_id = (0..16).map(|_| format!("{:02x}", rand::rng().random::<u8>())).collect();
+                let _ = std::fs::write(&settings_path, serde_json::to_string_pretty(&settings)?);
+            }
             if settings.market.is_empty() {
                 settings.market = "DK".into();
             }
@@ -894,6 +958,7 @@ pub fn run() {
                 sync_etags: Default::default(),
                 local_rev: Default::default(),
                 sync_lock: Default::default(),
+                social: Default::default(),
             });
             tray::setup(app.handle())?;
             Ok(())
@@ -940,6 +1005,9 @@ pub fn run() {
             get_floorplan,
             save_floorplan,
             sync_pull,
+            get_social,
+            vote_track,
+            mark_added,
             set_household,
             rename_household,
         ])

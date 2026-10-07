@@ -3,6 +3,7 @@ import { api, fmt, type Group, type PlayerState } from "./api";
 import type { Run } from "./App";
 import { Art } from "./Browse";
 import { usePosition, useVolume } from "./TopBar";
+import { VoteButtons } from "./Social";
 import * as Icon from "./icons";
 
 export type NextUp = { title: string; artist?: string } | null;
@@ -54,6 +55,7 @@ export function Mini({ groups, group, onSelect, state, nextUp, fetchedAt, run, p
               {playing ? <Icon.Pause width={16} height={16} /> : <Icon.Play width={16} height={16} />}
             </button>
             <button className="icon-btn" disabled={!g} onClick={() => g && run(() => api.control(g, "next"))}><Icon.Next /></button>
+            {t?.title && <VoteButtons song={t} compact />}
             <div className="mini-vol">
               <Icon.Volume width={14} height={14} />
               <input type="range" className="slider" min={0} max={100} value={vol} disabled={!g}
