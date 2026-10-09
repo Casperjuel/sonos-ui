@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/Casperjuel/sponos/compare/v0.10.0...v0.11.0) (2026-10-09)
+
+
+### Features
+
+* new reactions pop and float up in the queue ([c615fde](https://github.com/Casperjuel/sponos/commit/c615fde3c0b359ffaf0fc0d5b1f3549527202a29))
+
+
+### Bug Fixes
+
+* download links no longer point at a release whose files are still building ([767fea3](https://github.com/Casperjuel/sponos/commit/767fea363fc47654b11cfeed76f7e61c75eb90e1))
+
 ## [0.10.0](https://github.com/Casperjuel/sponos/compare/v0.9.0...v0.10.0) (2026-10-09)
 
 
