@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/Casperjuel/sponos/compare/v0.8.0...v0.9.0) (2026-10-09)
+
+
+### Features
+
+* songs go poof when you clear the queue ([5538a94](https://github.com/Casperjuel/sponos/commit/5538a94464b8a0dbdefbf6fe85e375a1b9b5d7a6))
+
+
+### Bug Fixes
+
+* Clear queue did nothing because the app window has no confirm dialog ([5538a94](https://github.com/Casperjuel/sponos/commit/5538a94464b8a0dbdefbf6fe85e375a1b9b5d7a6))
+* removing the floorplan image asks with a second click instead of a dialog that never showed ([5538a94](https://github.com/Casperjuel/sponos/commit/5538a94464b8a0dbdefbf6fe85e375a1b9b5d7a6))
+
 ## [0.8.0](https://github.com/Casperjuel/sponos/compare/v0.7.0...v0.8.0) (2026-10-07)
 
 
