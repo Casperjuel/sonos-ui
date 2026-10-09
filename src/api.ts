@@ -28,6 +28,8 @@ export type PlayerState = {
   duration: number;
   track?: Item;
   source?: string;
+  /** songs blend into each other */
+  crossfade?: boolean;
 };
 export type SpKind = "track" | "album" | "artist" | "playlist" | "liked";
 export type SpItem = {
@@ -72,6 +74,7 @@ export const api = {
   setVolume: (group: string, volume: number) => invoke<void>("set_volume", { group, volume }),
   setMute: (group: string, muted: boolean) => invoke<void>("set_mute", { group, muted }),
   setPlayMode: (group: string, mode: string) => invoke<void>("set_play_mode", { group, mode }),
+  setCrossfade: (group: string, on: boolean) => invoke<void>("set_crossfade", { group, on }),
   playIndex: (group: string, n: number) => invoke<void>("play_index", { group, n }),
   removeIndex: (group: string, n: number) => invoke<void>("remove_index", { group, n }),
   moveIndex: (group: string, from: number, before: number) => invoke<void>("move_index", { group, from, before }),

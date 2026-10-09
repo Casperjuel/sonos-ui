@@ -329,6 +329,8 @@ pub struct PlayerState {
     pub track: Option<Item>,
     /// e.g. "Spotify Connect" when the queue is bypassed
     pub source: Option<String>,
+    /// songs blend into each other (a setting of the room or group)
+    pub crossfade: bool,
 }
 
 pub fn hms(s: &str) -> u32 {
@@ -338,13 +340,14 @@ pub fn hms(s: &str) -> u32 {
 }
 
 pub async fn state(http: &reqwest::Client, ip: &str) -> Res<PlayerState> {
-    let (ti, pi, mi, ts, vol, mute) = tokio::join!(
+    let (ti, pi, mi, ts, vol, mute, xf) = tokio::join!(
         soap(http, ip, Svc::AVTransport, "GetTransportInfo", ""),
         soap(http, ip, Svc::AVTransport, "GetPositionInfo", ""),
         soap(http, ip, Svc::AVTransport, "GetMediaInfo", ""),
         soap(http, ip, Svc::AVTransport, "GetTransportSettings", ""),
         soap(http, ip, Svc::GroupRenderingControl, "GetGroupVolume", ""),
         soap(http, ip, Svc::GroupRenderingControl, "GetGroupMute", ""),
+        soap(http, ip, Svc::AVTransport, "GetCrossfadeMode", ""),
     );
     let ti = ti?;
     let pi = pi.unwrap_or_default();
@@ -378,6 +381,7 @@ pub async fn state(http: &reqwest::Client, ip: &str) -> Res<PlayerState> {
         Some("Stream".into())
     };
     Ok(PlayerState {
+        crossfade: xf.ok().and_then(|r| tag(&r, "CrossfadeMode")).as_deref() == Some("1"),
         transport: tag(&ti, "CurrentTransportState").unwrap_or_default(),
         play_mode: ts
             .ok()

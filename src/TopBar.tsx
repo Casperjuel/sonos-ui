@@ -97,6 +97,11 @@ export function TopBar({ group, state, fetchedAt, run, query, onQuery, onSetting
             <Icon.Repeat />
             {mode.repeat === "one" && <span className="badge">1</span>}
           </button>
+          <button className={`icon-btn sm ${state?.crossfade ? "on" : ""}`} disabled={!g}
+            title={state?.crossfade ? "Crossfade is on" : "Crossfade is off"}
+            onClick={() => g && run(() => api.setCrossfade(g, !state?.crossfade), state?.crossfade ? "Crossfade off" : "Crossfade on")}>
+            <Icon.Crossfade />
+          </button>
         </div>
         <div className="progress">
           <span>{fmt(pos)}</span>

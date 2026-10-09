@@ -399,6 +399,21 @@ async fn set_mute(app: State<'_, App>, group: String, muted: bool) -> Res<()> {
     .map(|_| ())
 }
 
+/// Crossfade belongs to the room (or the group, via its coordinator).
+#[tauri::command]
+async fn set_crossfade(app: State<'_, App>, group: String, on: bool) -> Res<()> {
+    let g = app.group(&group).await?;
+    sonos::soap(
+        &app.http,
+        &g.coordinator_ip,
+        Svc::AVTransport,
+        "SetCrossfadeMode",
+        &format!("<CrossfadeMode>{}</CrossfadeMode>", u8::from(on)),
+    )
+    .await
+    .map(|_| ())
+}
+
 #[tauri::command]
 async fn set_play_mode(app: State<'_, App>, group: String, mode: String) -> Res<()> {
     let g = app.group(&group).await?;
@@ -1008,6 +1023,7 @@ pub fn run() {
             set_volume,
             set_mute,
             set_play_mode,
+            set_crossfade,
             play_index,
             remove_index,
             move_index,
