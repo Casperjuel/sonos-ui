@@ -226,6 +226,7 @@ section { margin-top: 18px; }
 .now { align-items: center; justify-content: center; }
 .now-inner { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 24px; max-width: 520px; }
 .now-art { width: min(360px, 40vh); margin-bottom: 18px; }
+.now-text { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .now-art .art { border-radius: 8px; box-shadow: 0 20px 60px #000c; }
 .now h1 { font-size: 24px; }
 .now .sub { font-size: 14px; white-space: normal; }
@@ -579,7 +580,12 @@ section { margin-top: 18px; }
 
 /* ---- now playing as a record: sleeve + vinyl that slides out and spins (slower than 33⅓ rpm, which felt hectic) */
 .now-art.vinyl { position: relative; aspect-ratio: 1; }
-.vinyl .sleeve, .vinyl .record { position: absolute; transition: transform .9s cubic-bezier(.22, 1, .36, 1); }
+.vinyl .sleeve, .vinyl .record { position: absolute; transition: transform .9s cubic-bezier(.22, 1, .36, 1), opacity .4s; }
+/* changing songs: tuck (record in) → out (sleeve leaves left) → enter (new one waits right) → settle (slides to the middle) */
+.vinyl.tuck .record { transition-duration: .38s; }
+.vinyl.out :is(.sleeve, .record) { transform: translateX(-75%) rotate(-7deg); opacity: 0; transition: transform .38s cubic-bezier(.55, 0, .75, .2), opacity .3s .08s; }
+.vinyl.enter :is(.sleeve, .record) { transform: translateX(75%) rotate(7deg); opacity: 0; transition: none; }
+.vinyl.settle :is(.sleeve, .record) { transition: transform .45s cubic-bezier(.22, 1, .36, 1), opacity .3s; }
 .vinyl .sleeve { inset: 0; z-index: 2; }
 .vinyl .record { inset: 3%; z-index: 1; border-radius: 50%; box-shadow: 0 18px 50px #000b; }
 .vinyl.spinning .sleeve { transform: translateX(-20%); }

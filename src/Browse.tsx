@@ -220,18 +220,21 @@ function NowPlaying({ state, group }: { state: PlayerState | null; group: Group 
   return (
     <main className="browse now">
       {t?.title ? (
-        // keyed on the track so a new song replays the entrance animation
-        <div className="now-inner" key={t.title}>
-          <Vinyl src={t.art} playing={state?.transport === "PLAYING"} />
-          <h1>{t.title}</h1>
-          <div className="sub">{[t.artist, t.album].filter(Boolean).join(" — ")}</div>
-          <div className="muted">
-            {group?.name}
-            {state?.source && <span className="chip">{state.source}</span>}
+        <div className="now-inner">
+          {/* stays mounted, so it can play the record-change animation */}
+          <Vinyl id={`${t.title}|${t.artist}`} src={t.art} playing={state?.transport === "PLAYING"} />
+          {/* keyed on the track so a new song replays the text's entrance animation */}
+          <div className="now-text" key={t.title}>
+            <h1>{t.title}</h1>
+            <div className="sub">{[t.artist, t.album].filter(Boolean).join(" — ")}</div>
+            <div className="muted">
+              {group?.name}
+              {state?.source && <span className="chip">{state.source}</span>}
+            </div>
+            <VoteButtons song={t} />
+            <Reactions song={t} />
+            <AddedByLine song={t} />
           </div>
-          <VoteButtons song={t} />
-          <Reactions song={t} />
-          <AddedByLine song={t} />
         </div>
       ) : (
         <div className="empty">
@@ -244,17 +247,42 @@ function NowPlaying({ state, group }: { state: PlayerState | null; group: Group 
   );
 }
 
-/** The cover as a record sleeve; the record slides out and spins while playing. */
-function Vinyl({ src, playing }: { src?: string; playing: boolean }) {
+type Phase = "in" | "tuck" | "out" | "enter" | "settle";
+
+/**
+ * The cover as a record sleeve; the record slides out and spins while playing.
+ * A new song plays a little routine: the record tucks into its sleeve, the sleeve
+ * leaves to the left, the new one slides in from the right, then its record comes out.
+ */
+function Vinyl({ id, src, playing }: { id: string; src?: string; playing: boolean }) {
+  const [shown, setShown] = useState({ id, src });
+  const [phase, setPhase] = useState<Phase>("in");
+
+  useEffect(() => {
+    if (id === shown.id) {
+      if (src !== shown.src) setShown({ id, src }); // same song, art just arrived
+      return;
+    }
+    const timers: number[] = [];
+    const at = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
+    setPhase("tuck");
+    at(380, () => setPhase("out"));
+    at(760, () => (setShown({ id, src }), setPhase("enter")));
+    at(800, () => setPhase("settle")); // a frame later, so it animates in from the right
+    at(1250, () => setPhase("in"));
+    return () => timers.forEach(clearTimeout);
+  }, [id, src]);
+
+  const spinning = playing && phase === "in";
   return (
-    <div className={`now-art vinyl ${playing ? "spinning" : ""}`}>
+    <div className={`now-art vinyl ${spinning ? "spinning" : ""} ${phase}`}>
       <div className="record">
         <div className="record-grooves">
-          <div className="record-label"><Art src={src} /></div>
+          <div className="record-label"><Art src={shown.src} /></div>
         </div>
         <div className="record-sheen" />
       </div>
-      <div className="sleeve"><Art src={src} /></div>
+      <div className="sleeve"><Art src={shown.src} /></div>
     </div>
   );
 }
