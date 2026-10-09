@@ -20,6 +20,8 @@ const KEY = /^[0-9a-f]{64}$/;
 const ID = /^[0-9a-f]{32}$/;
 const MAX_TRACKS = 500;
 const blobPath = (key: string) => `votes/${key}.json`;
+/** reads can return a weak ETag (W/"…"), but conditional writes only match the strong form */
+const strong = (etag: string) => etag.replace(/^W\//, "");
 
 function keyOf(req: Request) {
   const key = new URL(req.url).searchParams.get("key") ?? "";
@@ -92,12 +94,13 @@ export async function POST(req: Request) {
         contentType: "application/json",
         addRandomSuffix: false,
         // the first change creates the doc; afterwards only overwrite what we read
-        ...(etag ? { allowOverwrite: true, ifMatch: etag } : { allowOverwrite: false }),
+        ...(etag ? { allowOverwrite: true, ifMatch: strong(etag) } : { allowOverwrite: false }),
       });
       return Response.json(doc, { headers: { etag: r.etag, "cache-control": "no-store" } });
     } catch (e) {
       // someone else wrote in between, or created the doc first: read again
       const msg = String(e);
+      console.warn(`votes write attempt ${attempt + 1} failed (etag ${etag}):`, msg);
       const raced = e instanceof BlobPreconditionFailedError || msg.includes("conflict") || (!etag && msg.includes("exist"));
       if (!raced) throw e;
       await new Promise((r) => setTimeout(r, 30 + Math.random() * 120 * (attempt + 1)));
