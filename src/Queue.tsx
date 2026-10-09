@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, fmt, hms, type Group, type Item, type PlayerQueue, type PlayerState, type SpItem } from "./api";
 import type { Run } from "./App";
 import { Art } from "./Browse";
@@ -23,6 +23,27 @@ export function Queue({ group, state, queue, spQueue, castingMine, run }: Props)
   const connect = state?.source === "Spotify Connect";
   const scroller = useRef<HTMLDivElement>(null);
   // long queues: bring the playing song back into view
+  // clearing: "Clear" asks first (the webview has no confirm()), then the rows go poof
+  const [askClear, setAskClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  useEffect(() => {
+    if (!askClear) return;
+    const t = setTimeout(() => setAskClear(false), 4000);
+    return () => clearTimeout(t);
+  }, [askClear]);
+  useEffect(() => {
+    if (!clearing) return;
+    if (!queue.length) return setClearing(false);
+    const t = setTimeout(() => setClearing(false), 2500); // didn't clear: bring the rows back
+    return () => clearTimeout(t);
+  }, [clearing, queue.length]);
+  const clear = () => {
+    if (!g) return;
+    setAskClear(false);
+    setClearing(true);
+    run(() => api.clearQueue(g), "Queue cleared");
+  };
+
   const jumpToCurrent = () =>
     scroller.current?.querySelector(".qrow.current")?.scrollIntoView({ behavior: "smooth", block: "center" });
 
@@ -58,10 +79,15 @@ export function Queue({ group, state, queue, spQueue, castingMine, run }: Props)
               <Icon.Locate />
             </button>
           )}
-          {queue.length > 0 && (
-            <button className="link" onClick={() => g && confirm("Clear the whole queue?") && run(() => api.clearQueue(g), "Queue cleared")}>
-              Clear
-            </button>
+          {queue.length > 0 && !askClear && (
+            <button className="link" onClick={() => setAskClear(true)}>Clear</button>
+          )}
+          {askClear && (
+            <span className="ask-clear">
+              Clear {queue.length} {queue.length === 1 ? "song" : "songs"}?
+              <button className="link danger" onClick={clear}>Clear</button>
+              <button className="link" onClick={() => setAskClear(false)}>Cancel</button>
+            </span>
           )}
         </div>
         {state?.source && !state.queueActive && !connect && (
@@ -70,12 +96,13 @@ export function Queue({ group, state, queue, spQueue, castingMine, run }: Props)
           </div>
         )}
         {/* dimmed while something else (Spotify Connect, TV, radio) owns the room */}
-        <ol className={`queue-list ${state?.source && !state.queueActive ? "idle" : ""}`}>
+        <ol className={`queue-list ${state?.source && !state.queueActive ? "idle" : ""} ${clearing ? "poof" : ""}`}>
           {queue.map((it, i) => {
             const n = i + 1; // Sonos queue positions are 1-based
             return (
               <li key={`${it.id}-${n}`}
                 className={`qrow ${n === current ? "current" : ""} ${over === n ? "over" : ""} ${drag === n ? "dragging" : ""}`}
+                style={{ "--i": Math.min(i, 24) } as React.CSSProperties}
                 draggable
                 onDragStart={() => setDrag(n)}
                 onDragOver={(e) => (e.preventDefault(), setOver(n))}

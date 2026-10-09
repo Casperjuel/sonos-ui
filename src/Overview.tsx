@@ -56,6 +56,8 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
   /** buttons, keys and double-clicks glide; gestures follow the fingers */
   const [gliding, setGliding] = useState(false);
   const [panning, setPanning] = useState(false);
+  /** the webview has no confirm(): a second click confirms */
+  const [askRemove, setAskRemove] = useState(false);
 
   // ---- data
   const refresh = useCallback(() => api.overview().then(setData).catch(() => {}), []);
@@ -470,8 +472,10 @@ export function Overview({ syncTick, run, toast, onRegrouped, onOpenRoom }: Prop
             <div className="plan-file pad-x">
               <button className="btn small" onClick={() => fileRef.current?.click()}>{fp?.image ? "Replace" : "Upload"}</button>
               {fp?.image && (
-                <button className="btn small" onClick={() => confirm("Remove the floorplan image? Speaker positions are kept.") && save({ ...fp, image: undefined })}>
-                  Remove
+                <button className={`btn small ${askRemove ? "danger" : ""}`}
+                  onClick={() => (askRemove ? (save({ ...fp, image: undefined }), setAskRemove(false)) : setAskRemove(true))}
+                  onMouseLeave={() => setAskRemove(false)}>
+                  {askRemove ? "Remove image? Speakers stay" : "Remove"}
                 </button>
               )}
             </div>

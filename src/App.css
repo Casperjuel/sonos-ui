@@ -518,3 +518,26 @@ section { margin-top: 18px; }
 .about-privacy { line-height: 1.5; }
 .about-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .about-foot { border-top: 1px solid var(--line); padding-top: 12px; text-align: center; }
+
+/* ---- clearing the queue: ask, then poof */
+.ask-clear { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); animation: rise .15s ease-out; white-space: nowrap; }
+.link.danger { color: #ff6b5e; font-weight: 600; }
+.btn.danger { background: #c2453a; color: #fff; }
+.queue-list.poof .qrow { pointer-events: none; animation: poof .5s cubic-bezier(.5, 0, .75, 0) forwards; animation-delay: calc(var(--i) * 28ms); }
+.queue-list.poof .qrow .q-art::after {
+  content: ""; position: absolute; inset: -16px; border-radius: 50%; pointer-events: none;
+  background:
+    radial-gradient(circle, #fff 0 2px, transparent 2.5px) 4px 10px / 14px 14px,
+    radial-gradient(circle, color-mix(in srgb, var(--green) 80%, #fff) 0 1.5px, transparent 2px) 0 0 / 11px 11px;
+  opacity: 0; animation: dust .55s ease-out forwards; animation-delay: calc(var(--i) * 28ms + 120ms);
+}
+.queue-list.poof .q-art { position: relative; overflow: visible; }
+@keyframes poof {
+  0% { transform: none; opacity: 1; filter: none; }
+  30% { transform: translateY(-2px) scale(1.03); opacity: 1; filter: none; }
+  100% { transform: translateY(-6px) scale(.55); opacity: 0; filter: blur(8px); }
+}
+@keyframes dust {
+  0% { opacity: .9; transform: scale(.35) rotate(0deg); }
+  100% { opacity: 0; transform: scale(1.7) rotate(25deg); }
+}
