@@ -221,14 +221,40 @@ export function Reactions({ song }: { song: SongRef }) {
   );
 }
 
-/** the top reactions as a tiny badge in list rows */
+/** the top reactions as a tiny badge in list rows; a new reaction pops and floats up */
 export function ReactionBadge({ song }: { song: SongRef }) {
   const t = useSocial().lookup(song);
+  const total = t?.reactions.reduce((n, r) => n + r.by.length, 0) ?? 0;
+  const prev = useRef<{ total: number; emojis: string[] } | null>(null);
+  const [pops, setPops] = useState<{ id: number; emoji: string; x: number; y: number }[]>([]);
+  const [bump, setBump] = useState(0);
+  const wrap = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const emojis = t?.reactions.map((r) => r.emoji) ?? [];
+    const before = prev.current;
+    prev.current = { total, emojis };
+    if (!before || total <= before.total) return; // first render, or a reaction taken back
+    // the emoji that grew (or is new), else the top one
+    const grew = t!.reactions.find((r) => !before.emojis.includes(r.emoji)) ?? t!.reactions[0];
+    const id = Date.now();
+    // the title clips overflow, so the floating emoji is placed against the window
+    const r = wrap.current?.getBoundingClientRect();
+    if (r) setPops((p) => [...p, { id, emoji: EMOJI[grew.emoji], x: r.left + 4, y: r.top }]);
+    setBump((b) => b + 1);
+    const timer = setTimeout(() => setPops((p) => p.filter((x) => x.id !== id)), 1200);
+    return () => clearTimeout(timer);
+  }, [total, t]);
+
   if (!t?.reactions.length) return null;
   return (
-    <span className="reaction-badge" title={t.reactions.map((r) => `${EMOJI[r.emoji]} ${names(r.by)}`).join("\n")}>
-      {t.reactions.slice(0, 3).map((r) => EMOJI[r.emoji]).join("")}
-      {t.reactions.reduce((n, r) => n + r.by.length, 0) > 1 && <small>{t.reactions.reduce((n, r) => n + r.by.length, 0)}</small>}
+    <span className="reaction-badge-wrap" ref={wrap}>
+      <span key={bump} className={`reaction-badge ${bump ? "bump" : ""}`}
+        title={t.reactions.map((r) => `${EMOJI[r.emoji]} ${names(r.by)}`).join("\n")}>
+        {t.reactions.slice(0, 3).map((r) => EMOJI[r.emoji]).join("")}
+        {total > 1 && <small>{total}</small>}
+      </span>
+      {pops.map((p) => <span key={p.id} className="reaction-pop" style={{ left: p.x, top: p.y }}>{p.emoji}</span>)}
     </span>
   );
 }
