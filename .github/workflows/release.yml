@@ -23,6 +23,14 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         id: rp
+      # release-please publishes the release straight away, but its files take ~15 min to
+      # build. Until then keep it a pre-release, so "latest" (the download page and the
+      # auto-updater) stays on the last release that has files.
+      - name: Hold back until built
+        if: steps.rp.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ steps.rp.outputs.tag_name }}" -R "${{ github.repository }}" --prerelease
 
   macos:
     needs: release-please
@@ -79,10 +87,11 @@ jobs:
           args: --target universal-apple-darwin
           tagName: ${{ env.TAG }}
 
-      - name: Attach Sponos.dmg
+      - name: Attach Sponos.dmg and make it the latest release
         run: |
           cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg Sponos.dmg
           gh release upload "$TAG" Sponos.dmg --clobber
+          gh release edit "$TAG" --prerelease=false --latest
           gh release edit "$TAG" --notes "$(gh release view "$TAG" --json body -q .body)
 
           ---
