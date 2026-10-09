@@ -113,6 +113,7 @@ export const api = {
   social: () => invoke<TrackSocial[]>("get_social"),
   vote: (track: TrackMeta, value: -1 | 0 | 1, person: Person | null) => invoke<TrackSocial[]>("vote_track", { track, value, person }),
   markAdded: (tracks: TrackMeta[], person: Person) => invoke<TrackSocial[]>("mark_added", { tracks, person }),
+  react: (track: TrackMeta, emoji: Emoji | null, person: Person | null) => invoke<TrackSocial[]>("react_track", { track, emoji, person }),
   /** the logged-in user's Spotify Connect queue */
   addToSpotifyQueue: (id: string) => invoke<void>("spotify_add_to_player_queue", { id }),
 };
@@ -142,8 +143,14 @@ export type TrackSocial = TrackMeta & {
   downBy: string[];
   /** only for songs added from Sponos by someone logged in to Spotify */
   addedBy?: Person & { at: number; me: boolean };
+  /** most popular first */
+  reactions: { emoji: Emoji; by: string[]; mine: boolean }[];
   at: number;
 };
+
+/** fun reactions next to 👍/👎; ids are what the server stores */
+export const EMOJI = { poo: "💩", unicorn: "🦄", fire: "🔥", dance: "💃", sleepy: "😴", party: "🎉" } as const;
+export type Emoji = keyof typeof EMOJI;
 
 /** The same song from the queue, Spotify Connect or search: title without
  * " - Remastered"/"(feat. …)", plus the first artist. */

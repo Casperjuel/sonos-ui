@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api, trackKey, type Me, type Person, type TrackMeta, type TrackSocial } from "./api";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { api, EMOJI, trackKey, type Emoji, type Me, type Person, type TrackMeta, type TrackSocial } from "./api";
 import { errText, type ToastFn } from "./App";
 import * as Icon from "./icons";
 
@@ -9,11 +9,13 @@ export type SongRef = { title?: string; artist?: string; art?: string };
 type Social = {
   lookup: (song: SongRef) => TrackSocial | undefined;
   vote: (song: SongRef, value: -1 | 1) => void;
+  /** toggles your emoji reaction (one per song) */
+  react: (song: SongRef, emoji: Emoji) => void;
   /** call after queueing songs from Sponos, so others see who added them */
   markAdded: (songs: SongRef[]) => void;
 };
 
-const Ctx = createContext<Social>({ lookup: () => undefined, vote: () => {}, markAdded: () => {} });
+const Ctx = createContext<Social>({ lookup: () => undefined, vote: () => {}, react: () => {}, markAdded: () => {} });
 export const SocialProvider = Ctx.Provider;
 export const useSocial = () => useContext(Ctx);
 
@@ -46,7 +48,7 @@ export function useSocialState(household: string | null, me: Me | null, toast: T
       const next = cur?.mine === value ? 0 : value; // same button again takes the vote back
       // show it straight away; the server's answer replaces it
       setTracks((all) => {
-        const t = all[m.key] ?? { ...m, up: 0, down: 0, mine: 0 as const, upBy: [], downBy: [], at: Date.now() };
+        const t = all[m.key] ?? { ...m, up: 0, down: 0, mine: 0 as const, upBy: [], downBy: [], reactions: [], at: Date.now() };
         const without = { up: t.up - (t.mine === 1 ? 1 : 0), down: t.down - (t.mine === -1 ? 1 : 0) };
         return {
           ...all,
@@ -54,6 +56,32 @@ export function useSocialState(household: string | null, me: Me | null, toast: T
         };
       });
       api.vote(m, next, person).then(apply).catch((e) => toast(errText(e), true));
+    },
+    [tracks, apply, toast, person],
+  );
+
+  const react = useCallback(
+    (s: SongRef, emoji: Emoji) => {
+      if (!s.title) return;
+      const m = meta(s);
+      const t = tracks[m.key];
+      const mine = t?.reactions.find((r) => r.mine)?.emoji;
+      const next = mine === emoji ? null : emoji; // same emoji again takes it back
+      // show it straight away; the server's answer replaces it
+      setTracks((all) => {
+        const cur = all[m.key] ?? { ...m, up: 0, down: 0, mine: 0 as const, upBy: [], downBy: [], reactions: [], at: Date.now() };
+        let reactions = cur.reactions
+          .map((r) => (r.mine ? { ...r, mine: false, by: r.by.filter((b) => b !== "You") } : r))
+          .filter((r) => r.by.length);
+        if (next) {
+          const hit = reactions.find((r) => r.emoji === next);
+          reactions = hit
+            ? reactions.map((r) => (r === hit ? { ...r, mine: true, by: [...r.by, "You"] } : r))
+            : [...reactions, { emoji: next, mine: true, by: ["You"] }];
+        }
+        return { ...all, [m.key]: { ...cur, reactions } };
+      });
+      api.react(m, next, person).then(apply).catch((e) => toast(errText(e), true));
     },
     [tracks, apply, toast, person],
   );
@@ -66,7 +94,7 @@ export function useSocialState(household: string | null, me: Me | null, toast: T
     [apply, person],
   );
 
-  return useMemo(() => ({ lookup, vote, markAdded }), [lookup, vote, markAdded]);
+  return useMemo(() => ({ lookup, vote, react, markAdded }), [lookup, vote, react, markAdded]);
 }
 
 const names = (list: string[]) => (list.length ? list.join(", ") : "");
@@ -137,5 +165,70 @@ export function AddedByLine({ song }: { song: SongRef }) {
       <AddedBy song={song} />
       <span>Added by {a.me ? "you" : a.name} · {ago(a.at)}</span>
     </div>
+  );
+}
+
+/** 💩 🦄 🔥 💃 😴 🎉 under the now-playing song: chips for what people picked, and a picker. */
+export function Reactions({ song }: { song: SongRef }) {
+  const { lookup, react } = useSocial();
+  const t = lookup(song);
+  const [open, setOpen] = useState(false);
+  const [bursts, setBursts] = useState<{ id: number; emoji: string; x: number }[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [open]);
+
+  if (!song.title) return null;
+  const pick = (emoji: Emoji) => {
+    const was = t?.reactions.find((r) => r.mine)?.emoji === emoji;
+    if (!was) {
+      // a little flurry floats up from the bar
+      const id = Date.now();
+      setBursts((b) => [...b, ...[0, 1, 2, 3, 4].map((i) => ({ id: id + i, emoji: EMOJI[emoji], x: Math.random() * 80 - 40 }))]);
+      setTimeout(() => setBursts((b) => b.filter((x) => x.id < id || x.id > id + 4)), 1400);
+    }
+    react(song, emoji);
+    setOpen(false);
+  };
+
+  return (
+    <div className="reactions" ref={ref}>
+      {t?.reactions.map((r) => (
+        <button key={r.emoji} className={`reaction ${r.mine ? "mine" : ""}`} onClick={() => pick(r.emoji)}
+          title={`${EMOJI[r.emoji]} ${names(r.by)}`}>
+          {EMOJI[r.emoji]} <span>{r.by.length}</span>
+        </button>
+      ))}
+      <button className="reaction add" onClick={() => setOpen((o) => !o)} title="React">
+        <span className="add-face">☺</span>+
+      </button>
+      {open && (
+        <div className="reaction-picker">
+          {(Object.keys(EMOJI) as Emoji[]).map((e, i) => (
+            <button key={e} onClick={() => pick(e)} style={{ "--i": i } as React.CSSProperties}>{EMOJI[e]}</button>
+          ))}
+        </div>
+      )}
+      {bursts.map((b, i) => (
+        <span key={b.id} className="reaction-burst" style={{ "--x": `${b.x}px`, "--d": `${(i % 5) * 70}ms` } as React.CSSProperties}>{b.emoji}</span>
+      ))}
+    </div>
+  );
+}
+
+/** the top reactions as a tiny badge in list rows */
+export function ReactionBadge({ song }: { song: SongRef }) {
+  const t = useSocial().lookup(song);
+  if (!t?.reactions.length) return null;
+  return (
+    <span className="reaction-badge" title={t.reactions.map((r) => `${EMOJI[r.emoji]} ${names(r.by)}`).join("\n")}>
+      {t.reactions.slice(0, 3).map((r) => EMOJI[r.emoji]).join("")}
+      {t.reactions.reduce((n, r) => n + r.by.length, 0) > 1 && <small>{t.reactions.reduce((n, r) => n + r.by.length, 0)}</small>}
+    </span>
   );
 }

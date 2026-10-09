@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, fmt, type Group, type PlayerState, type QueueMode, type SearchResult, type SpItem } from "./api";
 import { errText } from "./App";
-import { AddedByLine, VoteButtons } from "./Social";
+import { AddedByLine, Reactions, VoteButtons } from "./Social";
 import * as Icon from "./icons";
 
 type Props = {
@@ -230,6 +230,7 @@ function NowPlaying({ state, group }: { state: PlayerState | null; group: Group 
             {state?.source && <span className="chip">{state.source}</span>}
           </div>
           <VoteButtons song={t} />
+          <Reactions song={t} />
           <AddedByLine song={t} />
         </div>
       ) : (

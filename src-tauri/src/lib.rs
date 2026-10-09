@@ -929,7 +929,21 @@ async fn vote_track(
     person: Option<sync::Person>,
 ) -> Res<Vec<sync::TrackSocial>> {
     let (hh, device) = social_ctx(&app).await.ok_or("Voting needs sharing turned on in Settings → Sonos")?;
-    let change = sync::Change { person: person.as_ref(), vote: Some((&track, value.clamp(-1, 1))), added: &[] };
+    let change = sync::Change { person: person.as_ref(), vote: Some((&track, value.clamp(-1, 1))), react: None, added: &[] };
+    let (etag, tracks) = sync::change(&app.http, &hh, &device, change).await?;
+    Ok(store_social(&app, hh, etag, tracks).await)
+}
+
+/// A fun emoji reaction ("poo", "unicorn", …), or `None` to take yours back.
+#[tauri::command]
+async fn react_track(
+    app: State<'_, App>,
+    track: sync::TrackMeta,
+    emoji: Option<String>,
+    person: Option<sync::Person>,
+) -> Res<Vec<sync::TrackSocial>> {
+    let (hh, device) = social_ctx(&app).await.ok_or("Reactions need sharing turned on in Settings → Sonos")?;
+    let change = sync::Change { person: person.as_ref(), vote: None, react: Some((&track, emoji.as_deref())), added: &[] };
     let (etag, tracks) = sync::change(&app.http, &hh, &device, change).await?;
     Ok(store_social(&app, hh, etag, tracks).await)
 }
@@ -941,7 +955,7 @@ async fn mark_added(app: State<'_, App>, tracks: Vec<sync::TrackMeta>, person: s
     if tracks.is_empty() {
         return Ok(vec![]);
     }
-    let change = sync::Change { person: Some(&person), vote: None, added: &tracks };
+    let change = sync::Change { person: Some(&person), vote: None, react: None, added: &tracks };
     let (etag, all) = sync::change(&app.http, &hh, &device, change).await?;
     Ok(store_social(&app, hh, etag, all).await)
 }
@@ -1051,6 +1065,7 @@ pub fn run() {
             sync_pull,
             get_social,
             vote_track,
+            react_track,
             mark_added,
             set_household,
             rename_household,

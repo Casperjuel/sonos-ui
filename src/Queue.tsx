@@ -3,7 +3,7 @@ import { api, fmt, hms, type Group, type Item, type PlayerQueue, type PlayerStat
 import type { Run } from "./App";
 import { Art } from "./Browse";
 import * as Icon from "./icons";
-import { AddedBy, Score } from "./Social";
+import { AddedBy, ReactionBadge, Score } from "./Social";
 
 type Props = {
   group: Group | null;
@@ -122,7 +122,7 @@ export function Queue({ group, state, queue, spQueue, castingMine, run }: Props)
                   {n === current && state?.transport === "PLAYING" && <span className="eq"><i /><i /><i /></span>}
                 </div>
                 <div className="row-text">
-                  <div className="title">{it.title}<Score song={it} /></div>
+                  <div className="title">{it.title}<Score song={it} /><ReactionBadge song={it} /></div>
                   <div className="sub"><AddedBy song={it} />{it.artist}</div>
                 </div>
                 <span className="dur">{it.duration ? fmt(hms(it.duration)) : ""}</span>
@@ -150,7 +150,7 @@ function SpRow({ item, current, playing }: { item: SpItem; current?: boolean; pl
         {current && playing && <span className="eq"><i /><i /><i /></span>}
       </div>
       <div className="row-text">
-        <div className="title">{item.name}<Score song={{ title: item.name, artist: item.subtitle }} /></div>
+        <div className="title">{item.name}<Score song={{ title: item.name, artist: item.subtitle }} /><ReactionBadge song={{ title: item.name, artist: item.subtitle }} /></div>
         <div className="sub"><AddedBy song={{ title: item.name, artist: item.subtitle }} />{item.subtitle}</div>
       </div>
       <span className="dur">{item.durationMs ? fmt(item.durationMs / 1000) : ""}</span>

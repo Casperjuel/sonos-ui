@@ -182,8 +182,18 @@ pub struct TrackSocial {
     pub up_by: Vec<String>,
     pub down_by: Vec<String>,
     pub added_by: Option<AddedBy>,
+    /// fun emoji reactions ("poo", "unicorn", …), most popular first
+    pub reactions: Vec<Reaction>,
     /// last change, ms since epoch
     pub at: u64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Reaction {
+    pub emoji: String,
+    pub by: Vec<String>,
+    pub mine: bool,
 }
 
 #[derive(Deserialize, Default)]
@@ -200,6 +210,8 @@ struct RawTrack {
     #[serde(default)]
     votes: HashMap<String, i8>,
     added: Option<RawAdded>,
+    #[serde(default)]
+    reacts: HashMap<String, String>,
 }
 
 #[derive(Deserialize)]
@@ -231,6 +243,17 @@ fn decode(household: &str, device: &str, doc: SocialDoc) -> Vec<TrackSocial> {
             let (up_by, down_by) = (by(1), by(-1));
             // songs added by someone not logged in to Spotify have no person: show nothing
             let added_by = t.added.and_then(|a| Some(AddedBy { person: people.get(&a.by)?.clone(), at: a.at, me: a.by == me }));
+            let mut reactions: Vec<Reaction> = Vec::new();
+            for (d, emoji) in &t.reacts {
+                match reactions.iter_mut().find(|r| &r.emoji == emoji) {
+                    Some(r) => r.by.push(name(d)),
+                    None => reactions.push(Reaction { emoji: emoji.clone(), by: vec![name(d)], mine: false }),
+                }
+                if *d == me {
+                    reactions.iter_mut().find(|r| &r.emoji == emoji).unwrap().mine = true;
+                }
+            }
+            reactions.sort_by(|a, b| b.by.len().cmp(&a.by.len()).then(a.emoji.cmp(&b.emoji)));
             Some(TrackSocial {
                 meta,
                 up: up_by.len() as u32,
@@ -239,6 +262,7 @@ fn decode(household: &str, device: &str, doc: SocialDoc) -> Vec<TrackSocial> {
                 up_by,
                 down_by,
                 added_by,
+                reactions,
                 at: t.at,
             })
         })
@@ -275,6 +299,8 @@ pub async fn social(
 pub struct Change<'a> {
     pub person: Option<&'a Person>,
     pub vote: Option<(&'a TrackMeta, i8)>,
+    /// an emoji reaction; `None` takes yours back
+    pub react: Option<(&'a TrackMeta, Option<&'a str>)>,
     pub added: &'a [TrackMeta],
 }
 
@@ -292,6 +318,11 @@ pub async fn change(http: &reqwest::Client, household: &str, device: &str, c: Ch
         let mut v = track(m)?;
         v["vote"] = value.into();
         body["vote"] = v;
+    }
+    if let Some((m, emoji)) = c.react {
+        let mut v = track(m)?;
+        v["emoji"] = emoji.into();
+        body["react"] = v;
     }
     let mut last = String::new();
     for attempt in 0..4u64 {
@@ -375,9 +406,9 @@ mod tests {
         let ann = Person { name: "Ann".into(), image: Some("https://example.com/a.jpg".into()) };
         let bob = Person { name: "Bob".into(), image: None };
 
-        change(&http, &hh, "dev-a", Change { person: Some(&ann), vote: None, added: &[song.clone()] }).await.unwrap();
-        change(&http, &hh, "dev-a", Change { person: Some(&ann), vote: Some((&song, 1)), added: &[] }).await.unwrap();
-        let (_, all) = change(&http, &hh, "dev-b", Change { person: Some(&bob), vote: Some((&song, -1)), added: &[] }).await.unwrap();
+        change(&http, &hh, "dev-a", Change { person: Some(&ann), vote: None, react: None, added: &[song.clone()] }).await.unwrap();
+        change(&http, &hh, "dev-a", Change { person: Some(&ann), vote: Some((&song, 1)), react: None, added: &[] }).await.unwrap();
+        let (_, all) = change(&http, &hh, "dev-b", Change { person: Some(&bob), vote: Some((&song, -1)), react: Some((&song, Some("unicorn"))), added: &[] }).await.unwrap();
         let t = &all[0];
         assert_eq!((t.up, t.down, t.mine), (1, 1, -1));
         assert_eq!(t.up_by, vec!["Ann".to_string()]);
@@ -385,8 +416,10 @@ mod tests {
         let added = t.added_by.as_ref().unwrap();
         assert_eq!((added.person.name.as_str(), added.me), ("Ann", false));
 
-        let (_, all) = change(&http, &hh, "dev-b", Change { person: None, vote: Some((&song, 0)), added: &[] }).await.unwrap();
+        let (_, all) = change(&http, &hh, "dev-b", Change { person: None, vote: Some((&song, 0)), react: None, added: &[] }).await.unwrap();
         assert_eq!((all[0].up, all[0].down, all[0].mine), (1, 0, 0));
         assert!(all[0].added_by.is_some(), "taking a vote back keeps the 'added by'");
+        let r = &all[0].reactions[0];
+        assert_eq!((r.emoji.as_str(), r.mine), ("unicorn", true), "and the reaction");
     }
 }

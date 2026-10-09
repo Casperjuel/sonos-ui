@@ -11,10 +11,26 @@ import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
 // { tracks: { <trackId>: { meta, at, votes: { <deviceId>: 1 | -1 }, added?: { by: <deviceId>, at } } },
 //   people: { <deviceId>: <person> } }
 
-type Track = { meta: string; at: number; votes: Record<string, 1 | -1>; added?: { by: string; at: number } };
+// `reacts` (fun emoji reactions) came later: older apps ignore it, and since they only send
+// votes and adds, a write from them keeps it untouched.
+type Track = {
+  meta: string;
+  at: number;
+  votes: Record<string, 1 | -1>;
+  added?: { by: string; at: number };
+  reacts?: Record<string, string>;
+};
 type Doc = { tracks: Record<string, Track>; people: Record<string, string> };
 type Ref = { track: string; meta: string };
-type Change = { device: string; person?: string | null; added?: Ref[]; vote?: Ref & { vote: -1 | 0 | 1 } };
+type Change = {
+  device: string;
+  person?: string | null;
+  added?: Ref[];
+  vote?: Ref & { vote: -1 | 0 | 1 };
+  /** null takes your reaction back */
+  react?: Ref & { emoji: string | null };
+};
+const EMOJI = ["poo", "unicorn", "fire", "dance", "sleepy", "party"];
 
 const KEY = /^[0-9a-f]{64}$/;
 const ID = /^[0-9a-f]{32}$/;
@@ -35,7 +51,8 @@ function valid(c: Change | null): c is Change {
   if (c.person != null && (typeof c.person !== "string" || c.person.length > 2048)) return false;
   if (c.added && (!Array.isArray(c.added) || c.added.length > 500 || !c.added.every(validRef))) return false;
   if (c.vote && (!validRef(c.vote) || ![-1, 0, 1].includes(c.vote.vote))) return false;
-  return !!(c.vote || c.added?.length || c.person);
+  if (c.react && (!validRef(c.react) || (c.react.emoji !== null && !EMOJI.includes(c.react.emoji)))) return false;
+  return !!(c.vote || c.react || c.added?.length || c.person);
 }
 
 async function read(key: string, ifNoneMatch?: string) {
@@ -44,6 +61,8 @@ async function read(key: string, ifNoneMatch?: string) {
   if (r.statusCode === 304) return { doc: null, etag: r.blob.etag, unchanged: true };
   return { doc: (await new Response(r.stream).json()) as Doc, etag: r.blob.etag, unchanged: false };
 }
+
+const empty = (t: Track) => !Object.keys(t.votes).length && !t.added && !Object.keys(t.reacts ?? {}).length;
 
 function apply(d: Doc, c: Change) {
   const now = Date.now();
@@ -58,7 +77,14 @@ function apply(d: Doc, c: Change) {
     const t = touch(c.vote);
     if (c.vote.vote === 0) delete t.votes[c.device];
     else t.votes[c.device] = c.vote.vote;
-    if (!Object.keys(t.votes).length && !t.added) delete d.tracks[c.vote.track];
+    if (empty(t)) delete d.tracks[c.vote.track];
+  }
+  if (c.react) {
+    const t = touch(c.react);
+    t.reacts ??= {};
+    if (c.react.emoji === null) delete t.reacts[c.device];
+    else t.reacts[c.device] = c.react.emoji;
+    if (empty(t)) delete d.tracks[c.react.track];
   }
   if (c.person) d.people[c.device] = c.person;
 
