@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/Casperjuel/sponos/compare/v0.12.0...v0.13.0) (2026-10-09)
+
+
+### Features
+
+* new app icon, a vinyl record with glowing green grooves and an S on the label ([ce5087d](https://github.com/Casperjuel/sponos/commit/ce5087da9bd17625980abb7909146e63da44de03))
+
 ## [0.12.0](https://github.com/Casperjuel/sponos/compare/v0.11.0...v0.12.0) (2026-10-09)
 
 
