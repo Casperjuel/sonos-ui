@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.0](https://github.com/Casperjuel/sponos/compare/v0.11.0...v0.12.0) (2026-10-09)
+
+
+### Features
+
+* now playing as a vinyl record that spins while playing ([7b02b4f](https://github.com/Casperjuel/sponos/commit/7b02b4f2a126d49424b887d47e365a6f491b78aa))
+* records swap with an outro and intro animation when the song changes ([1b93d43](https://github.com/Casperjuel/sponos/commit/1b93d436ca582f4820f4fabf326d168008657eb4))
+
+
+### Bug Fixes
+
+* slower record spin ([803f56b](https://github.com/Casperjuel/sponos/commit/803f56b0a3e490e54deedef00dce293ffb15e00e))
+* the cover's reflection no longer smears the song title ([635a8b7](https://github.com/Casperjuel/sponos/commit/635a8b7f3970c4af7c181d00c0e7b605699827aa))
+
 ## [0.11.0](https://github.com/Casperjuel/sponos/compare/v0.10.0...v0.11.0) (2026-10-09)
 
 
