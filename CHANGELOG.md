@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/Casperjuel/sponos/compare/v0.9.0...v0.10.0) (2026-10-09)
+
+
+### Features
+
+* react to songs with 💩 🦄 🔥 💃 😴 🎉, next to the thumbs ([46f96f3](https://github.com/Casperjuel/sponos/commit/46f96f3394b5c09ede1b9ce45ce2ef074ead2c04))
+* turn crossfade on or off from the top bar ([d6169ae](https://github.com/Casperjuel/sponos/commit/d6169ae8401d09dfd5daf5db1f7b4ff6b437c684))
+
+
+### Bug Fixes
+
+* votes and "added by" stopped saving once a system had any (weak ETag from the blob store) ([49f2970](https://github.com/Casperjuel/sponos/commit/49f2970ac8cfdab74028b4dfe234147456f5f614))
+
 ## [0.9.0](https://github.com/Casperjuel/sponos/compare/v0.8.0...v0.9.0) (2026-10-09)
 
 
