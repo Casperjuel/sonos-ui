@@ -1,5 +1,7 @@
 <img src="src-tauri/icons/128x128@2x.png" width="128" alt="">
 
+**[Download for Mac](https://casperjuel.github.io/sponos/)**
+
 # Sponos
 
 A fast desktop controller for Sonos speakers on macOS, with Spotify search and queueing.

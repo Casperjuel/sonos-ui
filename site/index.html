@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sponos</title>
+  <meta name="description" content="A nicer way to play music on Sonos, with Spotify built in. Free for Mac.">
+  <meta property="og:title" content="Sponos">
+  <meta property="og:description" content="A nicer way to play music on Sonos, with Spotify built in.">
+  <meta property="og:image" content="https://casperjuel.github.io/sponos/screenshot.jpg">
+  <link rel="icon" href="icon.png">
+  <style>
+    :root {
+      --bg: #0d0f0d;
+      --text: #f3f5f2;
+      --dim: #9aa39a;
+      --line: rgba(255, 255, 255, .1);
+      --green: #3ddc6f;
+      --green-dark: #1fae4c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+      font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background-image: radial-gradient(1200px 600px at 50% -10%, rgba(61, 220, 111, .18), transparent 70%);
+    }
+    main { max-width: 1080px; margin: 0 auto; padding: 72px 16px 40px; text-align: center; }
+    .icon { width: 104px; height: 104px; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .55)); }
+    h1 { font-size: clamp(40px, 7vw, 64px); letter-spacing: -.03em; margin: 18px 0 6px; line-height: 1.05; }
+    .tagline { font-size: clamp(17px, 2.4vw, 21px); color: var(--dim); margin: 0 auto 32px; max-width: 34ch; }
+    .download {
+      display: inline-flex; align-items: center; gap: 10px; padding: 16px 30px; border-radius: 999px;
+      background: linear-gradient(180deg, var(--green), var(--green-dark)); color: #04130a; font-weight: 700; font-size: 18px;
+      text-decoration: none; box-shadow: 0 12px 30px rgba(61, 220, 111, .35), inset 0 1px 0 rgba(255, 255, 255, .45);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .download:hover { transform: translateY(-2px); box-shadow: 0 18px 40px rgba(61, 220, 111, .45), inset 0 1px 0 rgba(255, 255, 255, .45); }
+    .download svg { width: 20px; height: 20px; }
+    .meta { margin-top: 12px; font-size: 13px; color: var(--dim); }
+    .shot { margin: 56px auto 0; max-width: 100%; }
+    .shot img { width: 100%; height: auto; display: block; border-radius: 18px; box-shadow: 0 40px 90px rgba(0, 0, 0, .6); }
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 64px 0 0; padding: 0; list-style: none; text-align: left; counter-reset: step; }
+    .steps li { padding: 20px; border-radius: 16px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); counter-increment: step; }
+    .steps li::before {
+      content: counter(step); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; margin-bottom: 12px;
+      background: rgba(61, 220, 111, .16); color: var(--green); font-weight: 700; font-size: 14px;
+    }
+    .steps b { display: block; margin-bottom: 4px; }
+    .steps span { color: var(--dim); font-size: 14px; }
+    footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+    footer a { color: var(--text); }
+    @media (max-width: 560px) { main { padding-top: 48px; } .shot { margin-top: 40px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="icon" src="icon.png" alt="">
+    <h1>Sponos</h1>
+    <p class="tagline">A nicer way to play music on Sonos, with Spotify built in.</p>
+
+    <a class="download" href="https://github.com/casperjuel/sponos/releases/latest/download/Sponos.dmg">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M6 11l6 6 6-6M5 21h14"/></svg>
+      Download for Mac
+    </a>
+    <p class="meta"><span id="version">Latest version</span> · macOS 12 or later · Apple Silicon and Intel · Free</p>
+
+    <figure class="shot">
+      <img src="screenshot.jpg" width="2000" height="1570" alt="Sponos showing what's playing, the queue and Spotify playlists">
+    </figure>
+
+    <ol class="steps">
+      <li><b>Install</b><span>Open the download and drag Sponos to Applications.</span></li>
+      <li><b>Allow the local network</b><span>Click Allow when macOS asks. That's how Sponos finds your speakers.</span></li>
+      <li><b>Connect Spotify</b><span>Optional: see your playlists and liked songs. Search works without it.</span></li>
+    </ol>
+
+    <footer>
+      Updates install by themselves · <a href="https://github.com/casperjuel/sponos">GitHub</a> · Not affiliated with Sonos or Spotify
+    </footer>
+  </main>
+  <script>
+    // show the actual version; the button always serves the newest anyway
+    fetch("https://api.github.com/repos/casperjuel/sponos/releases/latest")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => r && r.tag_name && (document.getElementById("version").textContent = `Version ${r.tag_name.replace(/^v/, "")}`))
+      .catch(() => {});
+  </script>
+</body>
+</html>
