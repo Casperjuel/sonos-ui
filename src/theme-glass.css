@@ -291,16 +291,18 @@
 [data-theme="glass"] .connect h2 { color: var(--accent); }
 
 /* now playing: floating cover with a glass reflection, re-entering on every new track */
-[data-theme="glass"] .now-art .art {
+[data-theme="glass"] .now-art .sleeve .art {
   border-radius: 20px;
   box-shadow: 0 40px 80px rgba(0, 0, 0, .5), 0 0 60px rgba(var(--accent-rgb), .25), 0 0 0 1px rgba(255, 255, 255, .15);
   -webkit-box-reflect: below 6px linear-gradient(transparent 72%, rgba(255, 255, 255, .2));
   transform: perspective(900px) rotateX(4deg);
   transition: transform .8s var(--spring);
 }
-[data-theme="glass"][data-playing="1"] .now-art .art { animation: float 6s ease-in-out infinite; }
-[data-theme="glass"] .now-art:hover .art { transform: perspective(900px) rotateX(0deg) scale(1.03); animation-play-state: paused; }
+[data-theme="glass"][data-playing="1"] .now-art .sleeve .art { animation: float 6s ease-in-out infinite; }
+[data-theme="glass"] .now-art:hover .sleeve .art { transform: perspective(900px) rotateX(0deg) scale(1.03); animation-play-state: paused; }
 [data-theme="glass"] .now-art { margin-bottom: 64px; }
+/* the record reflects too, and sits in the same tilted light as the sleeve */
+[data-theme="glass"] .vinyl .record { -webkit-box-reflect: below 6px linear-gradient(transparent 72%, rgba(255, 255, 255, .14)); box-shadow: 0 30px 70px rgba(0, 0, 0, .55), 0 0 50px rgba(var(--accent-rgb), .18); }
 [data-theme="glass"] .now h1 { font-size: 30px; text-shadow: 0 2px 14px rgba(0, 0, 0, .35); }
 @keyframes float {
   0%, 100% { transform: perspective(900px) rotateX(4deg) translateY(0); }

@@ -222,7 +222,7 @@ function NowPlaying({ state, group }: { state: PlayerState | null; group: Group 
       {t?.title ? (
         // keyed on the track so a new song replays the entrance animation
         <div className="now-inner" key={t.title}>
-          <div className="now-art"><Art src={t.art} /></div>
+          <Vinyl src={t.art} playing={state?.transport === "PLAYING"} />
           <h1>{t.title}</h1>
           <div className="sub">{[t.artist, t.album].filter(Boolean).join(" — ")}</div>
           <div className="muted">
@@ -241,6 +241,21 @@ function NowPlaying({ state, group }: { state: PlayerState | null; group: Group 
         </div>
       )}
     </main>
+  );
+}
+
+/** The cover as a record sleeve; the record slides out and spins while playing. */
+function Vinyl({ src, playing }: { src?: string; playing: boolean }) {
+  return (
+    <div className={`now-art vinyl ${playing ? "spinning" : ""}`}>
+      <div className="record">
+        <div className="record-grooves">
+          <div className="record-label"><Art src={src} /></div>
+        </div>
+        <div className="record-sheen" />
+      </div>
+      <div className="sleeve"><Art src={src} /></div>
+    </div>
   );
 }
 
