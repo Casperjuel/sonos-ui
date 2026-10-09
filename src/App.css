@@ -577,7 +577,7 @@ section { margin-top: 18px; }
   100% { opacity: 0; transform: translateY(-34px) scale(.9) rotate(12deg); }
 }
 
-/* ---- now playing as a record: sleeve + vinyl that slides out and spins at 33⅓ rpm */
+/* ---- now playing as a record: sleeve + vinyl that slides out and spins (slower than 33⅓ rpm, which felt hectic) */
 .now-art.vinyl { position: relative; aspect-ratio: 1; }
 .vinyl .sleeve, .vinyl .record { position: absolute; transition: transform .9s cubic-bezier(.22, 1, .36, 1); }
 .vinyl .sleeve { inset: 0; z-index: 2; }
@@ -590,7 +590,7 @@ section { margin-top: 18px; }
     radial-gradient(circle, transparent 0 31%, #0a0a0a 31.5% 33%, transparent 33.5%),
     repeating-radial-gradient(circle, #111 0 1px, #1c1c1c 1.4px 2.6px),
     #111;
-  animation: spin 1.8s linear infinite; animation-play-state: paused;
+  animation: spin 4s linear infinite; animation-play-state: paused;
 }
 .vinyl.spinning .record-grooves { animation-play-state: running; }
 .record-label { width: 34%; aspect-ratio: 1; border-radius: 50%; overflow: hidden; position: relative; box-shadow: 0 0 0 3px #0a0a0a; }
